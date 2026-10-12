@@ -20,7 +20,7 @@ QSerialTool 是一个面向开发者与测试人员的跨平台串口调试助�
 当前仍需在允许执行本地产物的 Windows 环境和 Ubuntu 22.04 上完成单文件启动、真实串口和长时间稳定性验收。
 ## 环境要求
 
-- Python 3.10.x
+- Python 3.10.x（`pyproject.toml` 限定 `>=3.10,<3.11`，3.11 及以上暂不支持）
 - Windows 10/11 x64 或 Ubuntu 22.04 及以上 Linux x64
 - Git
 
@@ -42,6 +42,16 @@ python3.10 -m venv .venv
 ./.venv/bin/python -m pip install -e ".[dev,build]"
 ```
 
+### 依赖下载缓慢时
+
+`PySide6` 体积较大，直连 PyPI 在国内网络下可能只有几十 KB/s，安装过程会长时间没有输出。可在上述 `pip install` 命令中追加镜像源：
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -i https://mirrors.aliyun.com/pypi/simple/ -e ".[dev,build]"
+```
+
+Linux 环境替换为 `./.venv/bin/python` 后使用相同参数。镜像地址可换成其他可用源，例如 `https://pypi.tuna.tsinghua.edu.cn/simple/`。
+
 ## 生成依赖锁文件
 
 使用 pip-tools 根据 `pyproject.toml` 解析并锁定依赖：
@@ -59,6 +69,9 @@ Linux 环境将命令中的解释器路径替换为 `./.venv/bin/python`。
 ```
 
 Linux 环境使用 `./.venv/bin/python -m qserialtool`。
+
+本工程是 src 布局，包位于 `src/qserialtool/`，必须用 `-m` 模块方式启动。直接执行 `python src/qserialtool/__main__.py` 会报 `ModuleNotFoundError: No module named 'qserialtool'`：脚本方式执行时 Python 把脚本所在目录 `src/qserialtool/` 而非 `src/` 加入模块搜索路径，顶层包因此不可见。这是运行方式问题，不需要修改入口文件。
+
 ## 质量检查
 
 提交前按以下顺序执行：
