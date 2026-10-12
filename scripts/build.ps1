@@ -18,15 +18,15 @@ try {
     & $Python -m pytest
     if ($LASTEXITCODE -ne 0) { throw "Tests failed." }
 
-    & $Python -m PyInstaller --clean --noconfirm "packaging\qserialtool.spec"
+    & $Python -m PyInstaller --clean --noconfirm "packaging\serialmnt.spec"
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed." }
 
-    $Artifact = Join-Path $Root "dist\QSerialTool.exe"
+    $Artifact = Join-Path $Root "dist\SerialMNT.exe"
     if (-not (Test-Path -LiteralPath $Artifact)) {
         throw "Expected artifact was not produced: $Artifact"
     }
     $Hash = (Get-FileHash -LiteralPath $Artifact -Algorithm SHA256).Hash.ToLowerInvariant()
-    "$Hash  QSerialTool.exe" | Set-Content -LiteralPath "$Artifact.sha256" -Encoding ascii
+    "$Hash  SerialMNT.exe" | Set-Content -LiteralPath "$Artifact.sha256" -Encoding ascii
     Write-Output "Built: $Artifact"
     Write-Output "SHA256: $Hash"
 }

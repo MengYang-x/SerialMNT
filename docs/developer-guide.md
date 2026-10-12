@@ -1,4 +1,4 @@
-# QSerialTool 当前实现开发指南
+# SerialMNT 当前实现开发指南
 
 > 文档版本：1.0  
 > 软件版本：0.1.0  
@@ -113,7 +113,7 @@ disconnected -> connecting -> connected -> disconnecting -> disconnected
 ## 5. 线程、队列与并发边界
 
 - Qt 主线程负责所有窗口和控件操作。
-- 每个连接创建一个标准库 `threading.Thread`，名称为 `qserialtool-serial-worker`，不是 `QThread`。
+- 每个连接创建一个标准库 `threading.Thread`，名称为 `serialmnt-serial-worker`，不是 `QThread`。
 - Worker 默认读取块大小为 `8192` 字节，读取超时 `50 ms`，关闭超时 `1 s`。
 - 发送队列最大 `256` 个写入任务；队列满时抛出 `SendQueueFullError`，不阻塞 UI。
 - DTR/RTS 使用无界的小型控制队列；队列元素是固定布尔控制命令，不存在用户数据堆积风险。
@@ -165,8 +165,8 @@ disconnected -> connecting -> connected -> disconnecting -> disconnected
 
 `JsonConfigStore` 实现 schema version `1`：
 
-- Windows：`%APPDATA%\QSerialTool\settings.json`
-- Linux：`${XDG_CONFIG_HOME:-$HOME/.config}/QSerialTool/settings.json`
+- Windows：`%APPDATA%\SerialMNT\settings.json`
+- Linux：`${XDG_CONFIG_HOME:-$HOME/.config}/SerialMNT/settings.json`
 - 保存前先把现有文件复制为 `.bak`，再写入 `.tmp`，执行 `fsync()` 后用原子替换提交。
 - atomically 替换失败时抛出 `ConfigIOError`。
 - 读取到不可解析或不受支持的内容时，复制为 `settings.corrupt.<UTC时间>.json` 并返回 `None`。
@@ -178,9 +178,9 @@ disconnected -> connecting -> connected -> disconnecting -> disconnected
 
 `LogService` 管理单个会话的连接期日志：
 
-- 默认目录是 `~/Documents/QSerialTool/Logs`，可由用户覆盖。
+- 默认目录是 `~/Documents/SerialMNT/Logs`，可由用户覆盖。
 - 连接成功时创建文件，断开时刷新并关闭。
-- 文件名为 `QSerialTool_<清理后的端口>_YYYYMMDD_HHMMSS.<csv|txt>`；同名时追加数字后缀。
+- 文件名为 `SerialMNT_<清理后的端口>_YYYYMMDD_HHMMSS.<csv|txt>`；同名时追加数字后缀。
 - 每累计 `256 KiB` 或经过 `1 s` 时刷新一次，具体取决于先达到的条件。
 - 日志错误保存为会话错误，但不会中断串口 I/O。
 
@@ -198,7 +198,7 @@ CSV 输出使用 `utf-8-sig` 和 RFC 4180 字段：`timestamp`、`direction`、`
 - 终端模式高亮：每行渲染前调用 `terminal_highlight.find_highlights()` 识别 IPv4/MAC（`address`）、URL/邮箱（`link`）与关键字 OK/SUCCESS/PASS（`success`）、ERROR/FAIL（`error`）、WARN（`warning`）；关键字大小写不敏感、整词匹配，命中区间按 URL→邮箱→MAC→IPv4→关键字先到先得、重叠跳过；只有前景色未被 ANSI 显式设置的单元格才用 `theme_manager.highlight_colors()` 的对应颜色覆盖，其它属性不变。接收标题行的“高亮”勾选框（仅终端视图可见、默认勾选）通过 `TerminalOutput.set_highlight_enabled()` 统一开关整层高亮，并随 `SessionPreferences.highlight_enabled` 持久化。
 - `LogPanel`：以“日志与导出”分组呈现自动日志设置、打开目录和导出当前缓冲；网格布局为“自动保存 + 格式”一行、“目录”标签 + 整宽路径输入框一行、“选择目录/打开目录”等宽一行、“导出当前缓冲”整宽一行、状态文本一行，且不设行拉伸，因此面板贴合内容、最小宽度可放进侧栏最窄宽度（按钮不设最小宽度会被裁切，因此按最长 `sizeHint()` 统一 `setMinimumWidth()` 并全部 `Expanding`）。长路径状态文本不参与最小宽度计算，并按标签宽度做中间省略，完整路径保留在 tooltip。
 - `theme_manager`：`apply_theme()` 以 `style_sheet.tokens()` 为唯一取色来源，同时设置调色板（`Base` 取 `editor`、`Window` 取 `window`、`Highlight` 取 `accent_fill`，深色下额外指定禁用态文字）和全局 QSS，并按主题重设占位符文字颜色；`resolved_theme()`、`data_colors()`、`ansi_colors()` 和 `data_font()` 提供主题解析结果、数据区配色（`DataColors` 含正文 `text`、方向 `rx`/`tx`、`system` 与状态色）、ANSI 16 色和等宽字体；`ansi_color()` 把 0-255 索引映射为颜色（0-15 主题语义色，16-231 为 xterm 色立方，232-255 为灰度），`highlight_colors()` 提供终端模式高亮的地址、链接与成功/失败/警告关键字颜色；`CONTROL_HEIGHT_PX = 24` 是标题行与顶栏控件的统一高度。
-- `style_sheet`：`ThemeTokens` 保存浅色/深色两套设计令牌，`build_stylesheet()` 用令牌生成卡片、标签栏、下拉框、勾选框、滚动条、菜单等控件的 QSS。渲染数据区的 `editor` 必须与 palette `Base` 取同一令牌，否则对比度测试将不再反映真实渲染；QSS 刻意不声明 `font-family`/`font-size`，数据区等宽字体仍由 `data_font()` 在控件上设置。资源放在 `ui/assets/`，`assets_dir()` 兼容 PyInstaller 单文件解包目录，`app_icon()` 读取其中的 PNG 作为窗口图标；下拉箭头与勾选标记引用同目录的 SVG（`chevron-*.svg`、`check*.svg`），新增资源需同时登记到 `pyproject.toml` 的 `package-data` 与 `packaging/qserialtool.spec` 的 `datas`。
+- `style_sheet`：`ThemeTokens` 保存浅色/深色两套设计令牌，`build_stylesheet()` 用令牌生成卡片、标签栏、下拉框、勾选框、滚动条、菜单等控件的 QSS。渲染数据区的 `editor` 必须与 palette `Base` 取同一令牌，否则对比度测试将不再反映真实渲染；QSS 刻意不声明 `font-family`/`font-size`，数据区等宽字体仍由 `data_font()` 在控件上设置。资源放在 `ui/assets/`，`assets_dir()` 兼容 PyInstaller 单文件解包目录，`app_icon()` 读取其中的 PNG 作为窗口图标；下拉箭头与勾选标记引用同目录的 SVG（`chevron-*.svg`、`check*.svg`），新增资源需同时登记到 `pyproject.toml` 的 `package-data` 与 `packaging/serialmnt.spec` 的 `datas`。
 - `QtSessionBridge`：把 Worker 线程事件转换为 Qt 信号。
 - 数据字号：`theme_manager.DATA_FONT_PRESETS` 与 `data_font(size)` 生成数据区字体（`size=0` 时保持系统默认），`ReceivePanel.set_data_font_size()`、`SendPanel.set_data_font_size()` 与 `SessionTab.set_data_font_size()` 逐层转发；头部“字号”下拉框默认“跟随系统”，改变时立即应用到所有标签页并持久化为 `AppConfig.data_font_size`。`MainWindow` 的“字号”动作（`Ctrl+=`/`Ctrl++` 放大、`Ctrl+-` 缩小、`Ctrl+0` 恢复默认，并挂在 ☰ 菜单的字号子菜单）经 `_zoom_font()` 按预设档位步进；`SessionTab` 在接收区与发送编辑区的 `viewport()` 上安装事件过滤器，把带 `Ctrl` 的滚轮事件转成 `font_zoom_requested(int)` 信号。全局样式表在控件挂载和主题切换时会重新 polish 并覆盖显式设置的字体，因此 `MainWindow` 在 `addTab()` 之后以及 `_theme_changed()` 里都会重新调用 `set_data_font_size()`，字号不会因换主题而回退。
 - 自动换行：接收标题行的 `wrap_check`（默认开启）经 `ReceivePanel._settings_changed()` 调用 `TerminalOutput.set_wrap_enabled()`；开启时控件使用 `LineWrapMode.WidgetWidth` 与 `QTextOption.WrapMode.WrapAnywhere` 按宽度折行，关闭时恢复 `NoWrap`，分栏与终端视图共用同一控件，状态随 `SessionPreferences.wrap_enabled` 持久化。

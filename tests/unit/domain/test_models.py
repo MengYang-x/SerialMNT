@@ -6,7 +6,7 @@ from typing import cast
 
 import pytest
 
-from qserialtool.domain import (
+from serialmnt.domain import (
     DEFAULT_LINE_ENDING,
     AppConfig,
     ErrorCode,

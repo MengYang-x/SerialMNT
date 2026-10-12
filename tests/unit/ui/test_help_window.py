@@ -5,11 +5,11 @@ from pathlib import Path
 from PySide6.QtGui import QKeySequence
 from tests.fixtures.fakes import FakeClock, FakeTransport
 
-from qserialtool.application import SessionManager
-from qserialtool.domain import PortInfo
-from qserialtool.ui import HelpWindow, MainWindow
-from qserialtool.ui.help_window import _FALLBACK_TEXT
-from qserialtool.ui.style_sheet import assets_dir
+from serialmnt.application import SessionManager
+from serialmnt.domain import PortInfo
+from serialmnt.ui import HelpWindow, MainWindow
+from serialmnt.ui.help_window import _FALLBACK_TEXT
+from serialmnt.ui.style_sheet import assets_dir
 
 ROOT = Path(__file__).resolve().parents[3]
 DOCS_GUIDE = ROOT / "docs" / "user-guide.md"
@@ -83,5 +83,5 @@ def test_help_content_stays_in_sync_with_docs() -> None:
 
 
 def test_help_falls_back_when_asset_missing(monkeypatch: object, tmp_path: Path) -> None:
-    monkeypatch.setattr("qserialtool.ui.help_window.assets_dir", lambda: tmp_path)
+    monkeypatch.setattr("serialmnt.ui.help_window.assets_dir", lambda: tmp_path)
     assert HelpWindow._load_help_text() == _FALLBACK_TEXT

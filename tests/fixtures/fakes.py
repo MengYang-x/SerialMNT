@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from threading import Condition, Event, Lock
 from time import monotonic
 
-from qserialtool.domain import DomainError, SerialConfig
+from serialmnt.domain import DomainError, SerialConfig
 
 
 class FakeClock:

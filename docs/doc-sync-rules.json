@@ -2,18 +2,28 @@
   "rules": [
     {
       "name": "ui",
-      "sources": ["src/qserialtool/ui/**"],
+      "sources": ["src/serialmnt/ui/**"],
       "required_any": ["docs/user-guide.md", "docs/developer-guide.md"]
     },
     {
       "name": "core",
-      "sources": ["src/qserialtool/domain/**", "src/qserialtool/application/**"],
+      "sources": ["src/serialmnt/domain/**", "src/serialmnt/application/**"],
       "required_any": ["docs/developer-guide.md", "docs/adr/**/*.md"]
     },
     {
       "name": "infrastructure",
-      "sources": ["src/qserialtool/infrastructure/**"],
+      "sources": ["src/serialmnt/infrastructure/**"],
       "required_any": ["docs/developer-guide.md", "docs/user-guide.md"]
+    },
+    {
+      "name": "bootstrap",
+      "sources": [
+        "src/serialmnt/bootstrap/**",
+        "src/serialmnt/__init__.py",
+        "src/serialmnt/__main__.py",
+        "src/serialmnt/py.typed"
+      ],
+      "required_any": ["docs/developer-guide.md"]
     },
     {
       "name": "build",
@@ -42,7 +52,7 @@
     }
   ],
   "unmapped_fail": [
-    "src/qserialtool/**",
+    "src/serialmnt/**",
     "packaging/**",
     "scripts/build.ps1",
     "scripts/build.sh",

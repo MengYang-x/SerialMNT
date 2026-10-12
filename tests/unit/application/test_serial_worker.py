@@ -5,8 +5,8 @@ from typing import cast
 import pytest
 from tests.fixtures.fakes import FakeTransport, RecordingWorkerHandler
 
-from qserialtool.application import SerialWorker, SerialWorkerOptions
-from qserialtool.domain import (
+from serialmnt.application import SerialWorker, SerialWorkerOptions
+from serialmnt.domain import (
     InternalError,
     PortBusyError,
     SendQueueFullError,

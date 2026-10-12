@@ -5,7 +5,7 @@ from typing import cast
 
 import pytest
 
-from qserialtool.domain import BufferCapacityError, LogRecord, RecordBuffer
+from serialmnt.domain import BufferCapacityError, LogRecord, RecordBuffer
 
 
 def _record(raw: bytes) -> LogRecord:

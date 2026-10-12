@@ -2,7 +2,7 @@
 
 import pytest
 
-from qserialtool.ui.terminal_highlight import find_highlights
+from serialmnt.ui.terminal_highlight import find_highlights
 
 
 def test_detects_ipv4_as_address() -> None:

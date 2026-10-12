@@ -4,7 +4,7 @@ from typing import cast
 
 import pytest
 
-from qserialtool.domain import (
+from serialmnt.domain import (
     EncodingName,
     HexFormatError,
     IncrementalTextDecoder,

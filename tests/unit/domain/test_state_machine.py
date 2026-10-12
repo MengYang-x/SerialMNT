@@ -2,7 +2,7 @@
 
 import pytest
 
-from qserialtool.domain import InvalidStateTransitionError, SessionState, SessionStateMachine
+from serialmnt.domain import InvalidStateTransitionError, SessionState, SessionStateMachine
 
 
 def test_session_state_string_uses_stable_value() -> None:

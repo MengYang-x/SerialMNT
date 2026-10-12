@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from pathlib import Path
 
-from qserialtool.domain import (
+from serialmnt.domain import (
     AppConfig,
     Clock,
     ConfigStore,

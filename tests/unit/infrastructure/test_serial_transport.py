@@ -6,14 +6,14 @@ from typing import Any, cast
 import pytest
 import serial
 
-from qserialtool.domain import (
+from serialmnt.domain import (
     PortBusyError,
     PortNotFoundError,
     PortPermissionError,
     SerialConfig,
     TransportIOError,
 )
-from qserialtool.infrastructure import SerialTransport
+from serialmnt.infrastructure import SerialTransport
 
 
 class FakeSerial:

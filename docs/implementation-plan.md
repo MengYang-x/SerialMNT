@@ -1,4 +1,4 @@
-# QSerialTool 详细实施计划
+# SerialMNT 详细实施计划
 
 > 文档版本：1.0  
 > 编制日期：2026-10-01  
@@ -13,7 +13,7 @@
 
 ## 1. 文档目的
 
-本文档将 QSerialTool V1 的产品需求转化为可执行、可验证、可维护的工程实施计划。文档同时约束产品行为、架构边界、接口契约、并发模型、数据持久化、测试策略、发布流程和扩展方式。
+本文档将 SerialMNT V1 的产品需求转化为可执行、可验证、可维护的工程实施计划。文档同时约束产品行为、架构边界、接口契约、并发模型、数据持久化、测试策略、发布流程和扩展方式。
 
 本文档遵循以下原则：
 
@@ -28,7 +28,7 @@
 
 ### 2.1 产品定位
 
-QSerialTool 是一个面向嵌入式开发者、硬件工程师、测试人员和普通串口用户的跨平台桌面串口调试助手。
+SerialMNT 是一个面向嵌入式开发者、硬件工程师、测试人员和普通串口用户的跨平台桌面串口调试助手。
 
 V1 的主要价值是：
 
@@ -236,12 +236,12 @@ flowchart TB
 ### 5.4 建议目录结构
 
 ```text
-QSerialTool/
+SerialMNT/
 ├─ docs/
 │  ├─ implementation-plan.md
 │  └─ adr/
 ├─ src/
-│  └─ qserialtool/
+│  └─ serialmnt/
 │     ├─ bootstrap/
 │     ├─ domain/
 │     ├─ application/
@@ -261,7 +261,7 @@ QSerialTool/
 │  ├─ check_docs_sync.py
 │  └─ generate_icon.py
 ├─ packaging/
-│  └─ qserialtool.spec
+│  └─ serialmnt.spec
 ├─ pyproject.toml
 ├─ README.md
 ├─ LICENSE
@@ -720,8 +720,8 @@ stateDiagram-v2
 
 | 平台 | 配置路径 |
 |---|---|
-| Windows | `%APPDATA%/QSerialTool/settings.json` |
-| Linux | `$XDG_CONFIG_HOME/QSerialTool/settings.json`，未设置时为 `~/.config/QSerialTool/settings.json` |
+| Windows | `%APPDATA%/SerialMNT/settings.json` |
+| Linux | `$XDG_CONFIG_HOME/SerialMNT/settings.json`，未设置时为 `~/.config/SerialMNT/settings.json` |
 
 配置路径通过 QStandardPaths 计算，测试中注入临时目录。
 
@@ -824,8 +824,8 @@ TXT 是人工阅读格式，允许显示转义后的文本；需要无损数据�
 ### 14.4 自动日志
 
 - 默认关闭。
-- 启用时让用户选择目录；默认建议用户文档目录下的 `QSerialTool/Logs`。
-- 文件名：`QSerialTool_<sanitized-port>_<YYYYMMDD_HHmmss>.<ext>`。
+- 启用时让用户选择目录；默认建议用户文档目录下的 `SerialMNT/Logs`。
+- 文件名：`SerialMNT_<sanitized-port>_<YYYYMMDD_HHmmss>.<ext>`。
 - 端口名清理 Windows/Linux 非法字符并限制长度。
 - 每个标签每次连接创建新文件；不跨连接追加。
 - LogSink 至少每 1 秒、每 256 KiB 或在正常关闭时 flush。
@@ -988,7 +988,7 @@ flowchart TB
 - 入口为 `scripts/build.bat`（可双击或在终端运行），转调同目录 `build.ps1`，依次执行文档同步检查、Ruff 格式检查、Ruff 静态检查、pytest、PyInstaller 单文件构建，并生成 SHA-256 校验文件。
 - 使用独立虚拟环境。
 - 运行静态检查和自动化测试。
-- 使用 PyInstaller 单文件模式生成 `QSerialTool.exe`。
+- 使用 PyInstaller 单文件模式生成 `SerialMNT.exe`。
 - 构建时包含 Qt 必需插件、主题资源和第三方许可证。
 - GUI 子系统构建，不显示控制台窗口。
 - 产物记录版本、构建日期、Python 版本和 SHA-256。

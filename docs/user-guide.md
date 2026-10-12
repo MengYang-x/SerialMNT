@@ -1,4 +1,4 @@
-# QSerialTool 使用手册
+# SerialMNT 使用手册
 
 > 文档版本：1.0  
 > 软件版本：0.1.0  
@@ -15,13 +15,13 @@
 Windows PowerShell：
 
 ```powershell
-.\.venv\Scripts\python.exe -m qserialtool
+.\.venv\Scripts\python.exe -m serialmnt
 ```
 
 Linux：
 
 ```bash
-./.venv/bin/python -m qserialtool
+./.venv/bin/python -m serialmnt
 ```
 
 ### 1.2 运行单文件版本
@@ -29,14 +29,14 @@ Linux：
 Windows：
 
 ```powershell
-.\dist\QSerialTool.exe
+.\dist\SerialMNT.exe
 ```
 
 Linux：
 
 ```bash
-chmod +x ./dist/QSerialTool
-./dist/QSerialTool
+chmod +x ./dist/SerialMNT
+./dist/SerialMNT
 ```
 
 Linux 单文件仍依赖图形和系统库。如果启动时报 Qt `xcb` 平台插件错误，应先安装当前发行版对应的 XCB 运行库。单文件首次启动会解压到系统临时目录，因此启动速度可能慢于源码运行。
@@ -166,9 +166,9 @@ HEX 数据必须由完整字节组成；奇数长度或包含非法字符时会�
 ### 6.1 自动日志
 
 - 可选择 `CSV` 或 `TXT`。
-- 默认目录是当前用户主目录下的 `Documents/QSerialTool/Logs`，也可以手动选择其他目录。
+- 默认目录是当前用户主目录下的 `Documents/SerialMNT/Logs`，也可以手动选择其他目录。
 - 每次成功建立连接后创建新文件；断开时刷新并关闭。
-- 文件名格式为 `QSerialTool_端口名_YYYYMMDD_HHMMSS.扩展名`。端口名中的非法文件名字符会替换为下划线，重名时追加序号。
+- 文件名格式为 `SerialMNT_端口名_YYYYMMDD_HHMMSS.扩展名`。端口名中的非法文件名字符会替换为下划线，重名时追加序号。
 - 日志写入失败时会在界面报错，但不会主动中断串口收发。
 
 CSV 使用 UTF-8 BOM，字段顺序为：
@@ -200,13 +200,13 @@ TXT 使用 UTF-8，每行格式为：
 Windows 默认路径：
 
 ```text
-%APPDATA%\QSerialTool\settings.json
+%APPDATA%\SerialMNT\settings.json
 ```
 
 Linux 默认路径：
 
 ```text
-${XDG_CONFIG_HOME:-$HOME/.config}/QSerialTool/settings.json
+${XDG_CONFIG_HOME:-$HOME/.config}/SerialMNT/settings.json
 ```
 
 配置使用版本化 JSON，保存主题、窗口布局、活动标签、串口参数、显示偏好、日志偏好、发送格式、换行、周期间隔、发送历史和视图模式。旧版配置缺少视图模式时按分栏视图恢复。

@@ -1,4 +1,4 @@
-# QSerialTool 发布检查清单
+# SerialMNT 发布检查清单
 
 ## 代码和文档
 
@@ -23,10 +23,10 @@
 ## Windows 验收
 
 - [x] `scripts/build.bat` 在干净环境成功。
-- [x] 生成 `QSerialTool.exe` 和 SHA-256。
+- [x] 生成 `SerialMNT.exe` 和 SHA-256。
 - [ ] 单文件在允许执行本地产物的干净 Windows 测试机启动。
 - [ ] 无缺失 Qt 插件。
-- [ ] 窗口、任务栏与 `QSerialTool.exe` 图标显示正确。
+- [ ] 窗口、任务栏与 `SerialMNT.exe` 图标显示正确。
 - [ ] 配置文件可在用户 AppData 创建并恢复标签。
 - [ ] 完成真实串口收发、拔插、错误和两小时稳定性测试。
 

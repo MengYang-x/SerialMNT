@@ -6,8 +6,8 @@ from typing import cast
 import pytest
 from tests.fixtures.fakes import FakeClock, FakeTransport
 
-from qserialtool.application import SessionManager
-from qserialtool.domain import PortBusyError, SerialConfig, SessionState, ValidationError
+from serialmnt.application import SessionManager
+from serialmnt.domain import PortBusyError, SerialConfig, SessionState, ValidationError
 
 
 class StateRecorder:

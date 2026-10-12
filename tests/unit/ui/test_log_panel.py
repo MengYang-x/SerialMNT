@@ -2,12 +2,12 @@
 
 from tests.fixtures.fakes import FakeClock, FakeTransport
 
-from qserialtool.application import SessionController, SessionControllerOptions
-from qserialtool.domain import SerialConfig
-from qserialtool.ui import LogPanel
+from serialmnt.application import SessionController, SessionControllerOptions
+from serialmnt.domain import SerialConfig
+from serialmnt.ui import LogPanel
 
 _LONG_STATUS = (
-    "日志：C:\\Users\\tester\\Documents\\QSerialTool\\Logs\\QSerialTool_COM1_20261002_101010.csv"
+    "日志：C:\\Users\\tester\\Documents\\SerialMNT\\Logs\\SerialMNT_COM1_20261002_101010.csv"
 )
 
 

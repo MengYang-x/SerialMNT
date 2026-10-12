@@ -1,1 +1,1 @@
-"""QSerialTool 测试包。"""
+"""SerialMNT 测试包。"""

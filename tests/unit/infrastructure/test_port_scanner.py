@@ -2,8 +2,8 @@
 
 from dataclasses import dataclass
 
-from qserialtool.domain import PortInfo
-from qserialtool.infrastructure import SerialPortScanner
+from serialmnt.domain import PortInfo
+from serialmnt.infrastructure import SerialPortScanner
 
 
 @dataclass

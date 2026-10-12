@@ -2,7 +2,7 @@
 
 from datetime import timezone
 
-from qserialtool.infrastructure import SystemClock
+from serialmnt.infrastructure import SystemClock
 
 
 def test_system_clock_returns_aware_utc_and_monotonic_values() -> None:

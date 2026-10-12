@@ -26,8 +26,8 @@ from PySide6.QtWidgets import (
 )
 from tests.fixtures.fakes import FakeClock, FakeTransport
 
-from qserialtool.application import MAX_SESSION_TITLE_LENGTH, SessionManager
-from qserialtool.domain import (
+from serialmnt.application import MAX_SESSION_TITLE_LENGTH, SessionManager
+from serialmnt.domain import (
     DEFAULT_LINE_ENDING,
     AppConfig,
     LogRecord,
@@ -37,9 +37,9 @@ from qserialtool.domain import (
     SessionPreferences,
     SessionState,
 )
-from qserialtool.ui import MainWindow, ReceivePanel, SessionTab, data_colors
-from qserialtool.ui.terminal_output import TerminalOutput
-from qserialtool.ui.theme_manager import (
+from serialmnt.ui import MainWindow, ReceivePanel, SessionTab, data_colors
+from serialmnt.ui.terminal_output import TerminalOutput
+from serialmnt.ui.theme_manager import (
     DATA_FONT_PRESETS,
     ansi_color,
     data_font,

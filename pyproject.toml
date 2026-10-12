@@ -3,15 +3,15 @@ requires = ["setuptools>=77,<85", "wheel>=0.42"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "qserialtool"
+name = "serialmnt"
 dynamic = ["version"]
-description = "QSerialTool 跨平台串口调试助手"
+description = "SerialMNT 跨平台串口调试助手"
 readme = "README.md"
 requires-python = ">=3.10,<3.11"
 license = "MIT"
 license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 authors = [
-  { name = "QSerialTool contributors" },
+  { name = "SerialMNT contributors" },
 ]
 classifiers = [
   "Development Status :: 2 - Pre-Alpha",
@@ -43,22 +43,22 @@ build = [
 ]
 
 [project.scripts]
-qserialtool = "qserialtool.bootstrap.app:main"
+serialmnt = "serialmnt.bootstrap.app:main"
 [project.urls]
-Repository = "https://github.com/Queqiongtao/QSerialTool"
+Repository = "https://github.com/Queqiongtao/SerialMNT"
 
 [tool.setuptools]
 include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["qserialtool*"]
+include = ["serialmnt*"]
 
 [tool.setuptools.dynamic]
-version = { attr = "qserialtool.__version__" }
+version = { attr = "serialmnt.__version__" }
 
 [tool.setuptools.package-data]
-qserialtool = [
+serialmnt = [
   "py.typed",
   "ui/assets/*.svg",
   "ui/assets/*.png",
@@ -74,14 +74,14 @@ addopts = [
   "--strict-config",
   "--strict-markers",
   "-ra",
-  "--cov=qserialtool",
+  "--cov=serialmnt",
   "--cov-report=term-missing",
   "--cov-fail-under=80",
 ]
 
 [tool.coverage.run]
 branch = true
-source = ["qserialtool"]
+source = ["serialmnt"]
 
 [tool.coverage.report]
 show_missing = true

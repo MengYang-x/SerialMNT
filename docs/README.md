@@ -1,4 +1,4 @@
-# QSerialTool 文档索引
+# SerialMNT 文档索引
 
 > 文档版本：1.1  
 > 软件版本：0.1.0  
@@ -33,6 +33,7 @@
 - UI 行为变化：更新 `user-guide.md`；实现结构变化同时更新 `developer-guide.md`。
 - domain/application 变化：更新 `developer-guide.md`；涉及架构决策时新增或更新 ADR。
 - infrastructure 变化：按影响更新 `developer-guide.md` 或 `user-guide.md`。
+- bootstrap 与包入口（`bootstrap/**`、`__init__.py`、`__main__.py`、`py.typed`）变化：更新 `developer-guide.md`。
 - 构建、依赖和发布方式变化：更新构建文档、发布清单或第三方声明。
 - `AGENT.md` 规则变化：同步更新 `implementation-plan.md`。
 - 纯测试变更可豁免文档更新，但必须在提交说明中注明理由。

@@ -14,18 +14,18 @@ cd "$ROOT"
 "$PYTHON" -m ruff format --check .
 "$PYTHON" -m ruff check .
 QT_QPA_PLATFORM=offscreen "$PYTHON" -m pytest
-"$PYTHON" -m PyInstaller --clean --noconfirm packaging/qserialtool.spec
+"$PYTHON" -m PyInstaller --clean --noconfirm packaging/serialmnt.spec
 
-ARTIFACT="$ROOT/dist/QSerialTool"
+ARTIFACT="$ROOT/dist/SerialMNT"
 if [[ ! -x "$ARTIFACT" ]]; then
   echo "Expected artifact was not produced: $ARTIFACT" >&2
   exit 1
 fi
 
 if command -v sha256sum >/dev/null 2>&1; then
-  sha256sum "$ARTIFACT" | sed "s|$ARTIFACT|QSerialTool|" > "$ARTIFACT.sha256"
+  sha256sum "$ARTIFACT" | sed "s|$ARTIFACT|SerialMNT|" > "$ARTIFACT.sha256"
 else
-  shasum -a 256 "$ARTIFACT" | sed "s|$ARTIFACT|QSerialTool|" > "$ARTIFACT.sha256"
+  shasum -a 256 "$ARTIFACT" | sed "s|$ARTIFACT|SerialMNT|" > "$ARTIFACT.sha256"
 fi
 
 echo "Built: $ARTIFACT"

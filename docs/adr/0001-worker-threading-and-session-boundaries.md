@@ -6,7 +6,7 @@
 
 ## 背景
 
-QSerialTool 计划在 Windows 和 Linux 上运行，UI 使用 PySide6，串口由 pyserial 负责。串口读写可能阻塞，不能直接运行在 UI 主线程；同时多标签会话需要隔离状态、队列和资源生命周期。
+SerialMNT 计划在 Windows 和 Linux 上运行，UI 使用 PySide6，串口由 pyserial 负责。串口读写可能阻塞，不能直接运行在 UI 主线程；同时多标签会话需要隔离状态、队列和资源生命周期。
 
 ## 候选方案
 

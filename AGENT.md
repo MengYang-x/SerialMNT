@@ -1,13 +1,13 @@
-# QSerialTool 工程代理规范
+# SerialMNT 工程代理规范
 
 > 文档版本：1.2  
 > 更新时间：2026-10-04 18:23:19 CST（星期日）  
-> 适用范围：QSerialTool 全工程  
+> 适用范围：SerialMNT 全工程  
 > 文件用途：约束代理和开发者在仓库内的工作方式
 
 ## 1. 首要规则
 
-1. 本文件适用于整个 QSerialTool 工程。子目录若新增更具体的 `AGENT.md`，其规则只能补充本文件，不能降低本文件的工程要求。
+1. 本文件适用于整个 SerialMNT 工程。子目录若新增更具体的 `AGENT.md`，其规则只能补充本文件，不能降低本文件的工程要求。
 2. 开始任何任务前，必须先阅读本文件和 `docs/implementation-plan.md`，再检查与任务相关的源码、测试和文档。
 3. 用户当前明确指令优先于历史计划；如果两者冲突，必须先说明冲突，不得自行扩大或改变产品范围。
 4. 需求、公共接口、数据格式、线程模型、配置 schema 或发布方式发生变化时，必须同步更新实施计划或新增 ADR。
@@ -80,7 +80,7 @@
 工程采用 `src` 布局。目标结构如下：
 
 ```text
-QSerialTool/
+SerialMNT/
 ├─ AGENT.md
 ├─ README.md
 ├─ LICENSE
@@ -101,7 +101,7 @@ QSerialTool/
 │  ├─ doc-sync-rules.json
 │  └─ adr/
 ├─ src/
-│  └─ qserialtool/
+│  └─ serialmnt/
 │     ├─ __init__.py
 │     ├─ __main__.py
 │     ├─ bootstrap/
@@ -122,7 +122,7 @@ QSerialTool/
 │  ├─ check_docs_sync.py
 │  └─ generate_icon.py
 └─ packaging/
-   └─ qserialtool.spec
+   └─ serialmnt.spec
 ```
 
 目录规则：
@@ -341,4 +341,4 @@ pytest
 
 ---
 
-本文件是 QSerialTool 的工程执行规范。若工程实践需要改变本文件规则，应先说明原因、影响范围，并同步更新相关 ADR 和 `docs/implementation-plan.md`。
+本文件是 SerialMNT 的工程执行规范。若工程实践需要改变本文件规则，应先说明原因、影响范围，并同步更新相关 ADR 和 `docs/implementation-plan.md`。

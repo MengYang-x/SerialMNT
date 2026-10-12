@@ -25,7 +25,7 @@ from PySide6.QtGui import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-ASSETS = ROOT / "src" / "qserialtool" / "ui" / "assets"
+ASSETS = ROOT / "src" / "serialmnt" / "ui" / "assets"
 ICO_SIZES = (16, 32, 48, 256)
 ICO_MAX_EDGE = 256
 CORNER_RADIUS = 56.0
@@ -120,15 +120,15 @@ def main() -> int:
     app = QGuiApplication.instance() or QGuiApplication(sys.argv[:1])
     ASSETS.mkdir(parents=True, exist_ok=True)
     master = _draw_icon(256)
-    if not master.save(str(ASSETS / "qserialtool.png"), "PNG"):
+    if not master.save(str(ASSETS / "serialmnt.png"), "PNG"):
         raise RuntimeError("无法写出 PNG 图标。")
     _write_ico(
-        ASSETS / "qserialtool.ico",
+        ASSETS / "serialmnt.ico",
         tuple((size, _png_bytes(_draw_icon(size))) for size in ICO_SIZES),
     )
     del app
-    print(f"wrote {ASSETS / 'qserialtool.png'}")
-    print(f"wrote {ASSETS / 'qserialtool.ico'}")
+    print(f"wrote {ASSETS / 'serialmnt.png'}")
+    print(f"wrote {ASSETS / 'serialmnt.ico'}")
     return 0
 
 

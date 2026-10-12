@@ -19,6 +19,6 @@ if "%CODE%"=="0" (
 
 rem Double-clicked batch files close their console instantly, so pause only for that case.
 echo %cmdcmdline% | find /i "%~f0" >nul
-if not errorlevel 1 if not defined QST_NO_PAUSE pause
+if not errorlevel 1 if not defined SERIALMNT_NO_PAUSE pause
 
 endlocal & exit /b %CODE%

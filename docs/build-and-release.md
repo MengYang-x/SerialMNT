@@ -1,4 +1,4 @@
-# QSerialTool 构建与发布
+# SerialMNT 构建与发布
 
 ## 适用环境
 
@@ -35,8 +35,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build.ps1
 产物：
 
 ```text
-dist/QSerialTool.exe
-dist/QSerialTool.exe.sha256
+dist/SerialMNT.exe
+dist/SerialMNT.exe.sha256
 ```
 
 ## Linux 构建
@@ -51,8 +51,8 @@ chmod +x scripts/build.sh
 产物：
 
 ```text
-dist/QSerialTool
-dist/QSerialTool.sha256
+dist/SerialMNT
+dist/SerialMNT.sha256
 ```
 
 ## 文档同步与 CI
@@ -78,18 +78,18 @@ Windows 单文件目标机器无需安装 Python。Linux 单文件仍依赖常�
 
 ## 图标与样式资源
 
-应用图标与控件样式资源位于 `src/qserialtool/ui/assets/`：
+应用图标与控件样式资源位于 `src/serialmnt/ui/assets/`：
 
-- `qserialtool.png` / `qserialtool.ico`：窗口图标；Windows 单文件构建会同时把 ICO 写入可执行文件图标。
+- `serialmnt.png` / `serialmnt.ico`：窗口图标；Windows 单文件构建会同时把 ICO 写入可执行文件图标。
 - `chevron-*.svg`、`check*.svg`：下拉箭头与勾选标记（含禁用态），由全局 QSS 引用。
 
-这些文件通过 `packaging/qserialtool.spec` 的 `datas` 打进单文件产物（解包路径为 `qserialtool/ui/assets`），并在 `pyproject.toml` 的 `package-data` 中声明，保证源码安装同样可用。修改图标图形后运行 `.\.venv\Scripts\python.exe scripts\generate_icon.py` 重新生成 PNG/ICO，并与脚本一起提交。
+这些文件通过 `packaging/serialmnt.spec` 的 `datas` 打进单文件产物（解包路径为 `serialmnt/ui/assets`），并在 `pyproject.toml` 的 `package-data` 中声明，保证源码安装同样可用。修改图标图形后运行 `.\.venv\Scripts\python.exe scripts\generate_icon.py` 重新生成 PNG/ICO，并与脚本一起提交。
 
 ## 当前 Windows 构建记录
 
-2026-10-04 已成功生成：
+2026-10-04 已成功生成（当时产物名为改名前的 `QSerialTool.exe`，下列体积与哈希对应那个二进制；工程改名为 SerialMNT 后需重新构建并刷新本节）：
 
-- 文件：`dist/QSerialTool.exe`
+- 文件：`QSerialTool.exe`
 - 大小：44386828 字节
 - SHA-256：`f68785b39e5fbbbab832fb6fb3cf77eacf152d2281cdbaacd308543c1f1b91ed`
 - 当前执行环境受 Application Control 策略限制，无法直接启动该外部可执行文件；需要在允许执行本地构建产物的测试机上完成启动验收。

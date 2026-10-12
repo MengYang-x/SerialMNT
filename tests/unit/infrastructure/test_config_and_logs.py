@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from qserialtool.domain import (
+from serialmnt.domain import (
     DEFAULT_LINE_ENDING,
     AppConfig,
     LogIOError,
@@ -16,7 +16,7 @@ from qserialtool.domain import (
     SerialConfig,
     SessionPreferences,
 )
-from qserialtool.infrastructure import CsvLogSink, JsonConfigStore, TxtLogSink
+from serialmnt.infrastructure import CsvLogSink, JsonConfigStore, TxtLogSink
 
 
 def _record() -> LogRecord:

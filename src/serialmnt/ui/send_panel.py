@@ -1,0 +1,279 @@
+"""发送编辑器、历史记录和周期发送面板。"""
+
+from PySide6.QtCore import QSignalBlocker, QTimer, Signal
+from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtWidgets import (
+    QComboBox,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QPlainTextEdit,
+    QPushButton,
+    QSizePolicy,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
+)
+
+from serialmnt.application import SessionController
+from serialmnt.domain import (
+    DEFAULT_LINE_ENDING,
+    DisplayMode,
+    DomainError,
+    LineEnding,
+    SessionPreferences,
+    SessionState,
+    append_line_ending,
+    encode_text,
+    parse_hex,
+)
+from serialmnt.ui.theme_manager import CONTROL_HEIGHT_PX, data_font
+
+_NEWLINES: tuple[tuple[str, LineEnding], ...] = (
+    ("无换行", "none"),
+    ("CR", "cr"),
+    ("LF", "lf"),
+    ("CRLF", "crlf"),
+)
+
+
+class SendPanel(QWidget):
+    """编辑并发送文本或 HEX 数据。"""
+
+    preferences_changed = Signal()
+
+    def __init__(
+        self,
+        *,
+        controller: SessionController,
+        preferences: SessionPreferences | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._controller = controller
+        self._history: list[str] = []
+        self._connected = False
+        self._loading = False
+        self._build_ui()
+        self._connect_changes()
+        if preferences is not None:
+            self.apply_preferences(preferences)
+        self.set_connected(controller.state is SessionState.CONNECTED)
+
+    def _build_ui(self) -> None:
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+        layout.addLayout(self._build_header())
+        self.options_row = self._build_options()
+        layout.addWidget(self.options_row)
+        layout.addWidget(self._build_editor())
+        self._periodic_timer = QTimer(self)
+        self._periodic_timer.timeout.connect(self._periodic_tick)
+
+    def _build_header(self) -> QHBoxLayout:
+        header = QHBoxLayout()
+        header.setSpacing(6)
+        self.heading_label = QLabel("发送")
+        self.heading_label.setObjectName("panelHeading")
+        heading_font = self.heading_label.font()
+        heading_font.setBold(True)
+        self.heading_label.setFont(heading_font)
+        self.mode_combo = QComboBox()
+        self.mode_combo.addItem("文本", "text")
+        self.mode_combo.addItem("HEX", "hex")
+        self.newline_combo = QComboBox()
+        for label, value in _NEWLINES:
+            self.newline_combo.addItem(label, value)
+        self.newline_combo.setCurrentIndex(self.newline_combo.findData(DEFAULT_LINE_ENDING))
+        self.send_button = QPushButton("发送")
+        self.send_button.setProperty("primary", True)
+        self.send_button.setToolTip("Ctrl+Enter")
+        self.send_button.clicked.connect(self.send)
+        for widget in (self.mode_combo, self.newline_combo, self.send_button):
+            widget.setFixedHeight(CONTROL_HEIGHT_PX)
+
+        header.addWidget(self.heading_label)
+        header.addSpacing(12)
+        header.addWidget(QLabel("格式"))
+        header.addWidget(self.mode_combo)
+        header.addWidget(QLabel("换行"))
+        header.addWidget(self.newline_combo)
+        header.addStretch(1)
+        header.addWidget(self.send_button)
+        return header
+
+    def _build_options(self) -> QWidget:
+        row = QWidget()
+        options = QHBoxLayout(row)
+        options.setContentsMargins(0, 0, 0, 0)
+        options.setSpacing(6)
+        self.history_combo = QComboBox()
+        self.history_combo.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        )
+        self.history_combo.setMinimumContentsLength(12)
+        self.history_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.interval_spin = QSpinBox()
+        self.interval_spin.setRange(10, 86_400_000)
+        self.interval_spin.setValue(1000)
+        self.interval_spin.setSuffix(" ms")
+        self.periodic_button = QPushButton("开始周期")
+        self.periodic_button.setCheckable(True)
+        options.addWidget(QLabel("历史"))
+        options.addWidget(self.history_combo, 1)
+        options.addWidget(QLabel("间隔"))
+        options.addWidget(self.interval_spin)
+        options.addWidget(self.periodic_button)
+        for widget in (self.history_combo, self.interval_spin, self.periodic_button):
+            widget.setFixedHeight(CONTROL_HEIGHT_PX)
+        return row
+
+    def _build_editor(self) -> QPlainTextEdit:
+        self.editor = QPlainTextEdit()
+        self.editor.setPlaceholderText("输入待发送内容，按 Ctrl+Enter 发送")
+        self.editor.setMinimumHeight(120)
+        self.editor.setFont(data_font())
+        shortcut = QShortcut(QKeySequence("Ctrl+Return"), self.editor)
+        shortcut.activated.connect(self.send)
+        return self.editor
+
+    def _connect_changes(self) -> None:
+        self.mode_combo.currentIndexChanged.connect(self._settings_changed)
+        self.newline_combo.currentIndexChanged.connect(self._settings_changed)
+        self.interval_spin.valueChanged.connect(self._settings_changed)
+        self.history_combo.activated.connect(self._history_selected)
+        self.periodic_button.toggled.connect(self._periodic_toggled)
+
+    def apply_preferences(self, preferences: SessionPreferences) -> None:
+        """应用持久化的发送偏好和历史。"""
+        self._loading = True
+        try:
+            with (
+                QSignalBlocker(self.mode_combo),
+                QSignalBlocker(self.newline_combo),
+                QSignalBlocker(self.interval_spin),
+            ):
+                mode_index = self.mode_combo.findData(preferences.send_mode)
+                self.mode_combo.setCurrentIndex(max(mode_index, 0))
+                newline_index = self.newline_combo.findData(preferences.line_ending)
+                self.newline_combo.setCurrentIndex(max(newline_index, 0))
+                self.interval_spin.setValue(preferences.periodic_interval_ms)
+            self._history = list(preferences.send_history)
+            self._update_history_combo()
+        finally:
+            self._loading = False
+
+    @property
+    def history(self) -> tuple[str, ...]:
+        """返回按发送顺序排列的历史内容。"""
+        return tuple(self._history)
+
+    @property
+    def send_mode(self) -> DisplayMode:
+        """返回当前发送格式。"""
+        return self.mode_combo.currentData()  # type: ignore[return-value]
+
+    @property
+    def line_ending(self) -> LineEnding:
+        """返回当前换行设置。"""
+        return self.newline_combo.currentData()  # type: ignore[return-value]
+
+    def set_send_mode(self, mode: DisplayMode) -> None:
+        """切换发送格式，供终端设置菜单调用。"""
+        index = self.mode_combo.findData(mode)
+        if index >= 0:
+            self.mode_combo.setCurrentIndex(index)
+
+    def set_line_ending(self, line_ending: LineEnding) -> None:
+        """切换换行设置，供终端设置菜单调用。"""
+        index = self.newline_combo.findData(line_ending)
+        if index >= 0:
+            self.newline_combo.setCurrentIndex(index)
+
+    def set_connected(self, connected: bool) -> None:
+        """根据连接状态启用发送控件。"""
+        self._connected = connected
+        self.send_button.setEnabled(connected)
+        self.periodic_button.setEnabled(connected)
+        if not connected and self.periodic_button.isChecked():
+            self.periodic_button.setChecked(False)
+
+    def set_data_font_size(self, size: int) -> None:
+        """按全局字号更新发送编辑框字体。"""
+        self.editor.setFont(data_font(size))
+
+    def send(self) -> None:
+        """手动发送编辑器中的当前内容。"""
+        self._send_current(remember=True)
+
+    def send_content(self, content: str, *, remember: bool = True) -> bool:
+        """发送一行内容；空 payload 视为无操作，失败时返回 False。"""
+        try:
+            payload = self._build_payload(content)
+            if not payload:
+                return True
+            self._controller.send(payload)
+        except DomainError as exc:
+            QMessageBox.warning(self, "发送失败", exc.message)
+            return False
+        if remember and content:
+            self._remember_history(content)
+        return True
+
+    def _send_current(self, *, remember: bool) -> bool:
+        return self.send_content(self.editor.toPlainText(), remember=remember)
+
+    def _build_payload(self, content: str) -> bytes:
+        if self.send_mode == "hex":
+            data = parse_hex(content)
+        else:
+            data = encode_text(content, self._controller.config.encoding)
+        return append_line_ending(data, self.line_ending)
+
+    def _remember_history(self, content: str) -> None:
+        if self._history and self._history[-1] == content:
+            return
+        self._history.append(content)
+        self._history = self._history[-100:]
+        self._update_history_combo()
+        self.preferences_changed.emit()
+
+    def _update_history_combo(self) -> None:
+        with QSignalBlocker(self.history_combo):
+            self.history_combo.clear()
+            self.history_combo.addItem("选择历史", None)
+            for item in reversed(self._history):
+                self.history_combo.addItem(item.replace("\n", "\\n")[:80], item)
+
+    def _history_selected(self, index: int) -> None:
+        if index <= 0:
+            return
+        content = self.history_combo.itemData(index)
+        if isinstance(content, str):
+            self.editor.setPlainText(content)
+
+    def _settings_changed(self) -> None:
+        if not self._loading:
+            self.preferences_changed.emit()
+
+    def _periodic_toggled(self, enabled: bool) -> None:
+        if enabled:
+            if not self._connected or not self.editor.toPlainText():
+                self._loading = True
+                self.periodic_button.setChecked(False)
+                self._loading = False
+                return
+            self._periodic_timer.start(self.interval_spin.value())
+            self.periodic_button.setText("停止周期")
+        else:
+            self._periodic_timer.stop()
+            self.periodic_button.setText("开始周期")
+
+    def _periodic_tick(self) -> None:
+        if not self._send_current(remember=False):
+            self.periodic_button.setChecked(False)
+
+    def closeEvent(self, event: object) -> None:
+        self._periodic_timer.stop()
+        super().closeEvent(event)

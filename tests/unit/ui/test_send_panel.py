@@ -5,9 +5,9 @@ from threading import Event
 from PySide6.QtWidgets import QMessageBox
 from tests.fixtures.fakes import FakeClock, FakeTransport
 
-from qserialtool.application import SessionController, SessionControllerOptions
-from qserialtool.domain import DEFAULT_LINE_ENDING, SerialConfig, SessionPreferences, SessionState
-from qserialtool.ui import SendPanel
+from serialmnt.application import SessionController, SessionControllerOptions
+from serialmnt.domain import DEFAULT_LINE_ENDING, SerialConfig, SessionPreferences, SessionState
+from serialmnt.ui import SendPanel
 
 
 def _connected_controller(transport: FakeTransport) -> tuple[SessionController, Event]:

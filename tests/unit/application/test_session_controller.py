@@ -6,13 +6,13 @@ from typing import cast
 import pytest
 from tests.fixtures.fakes import FakeClock, FakeTransport
 
-from qserialtool.application import (
+from serialmnt.application import (
     MAX_SESSION_TITLE_LENGTH,
     SerialWorkerOptions,
     SessionController,
     SessionControllerOptions,
 )
-from qserialtool.domain import (
+from serialmnt.domain import (
     ErrorCode,
     InvalidStateTransitionError,
     PortBusyError,

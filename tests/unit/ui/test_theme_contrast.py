@@ -8,9 +8,9 @@ import pytest
 from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QApplication
 
-from qserialtool.ui import apply_theme, data_colors, resolved_theme
-from qserialtool.ui.style_sheet import assets_dir, build_stylesheet, tokens
-from qserialtool.ui.theme_manager import ansi_color, highlight_colors
+from serialmnt.ui import apply_theme, data_colors, resolved_theme
+from serialmnt.ui.style_sheet import assets_dir, build_stylesheet, tokens
+from serialmnt.ui.theme_manager import ansi_color, highlight_colors
 
 _DATA_COLOR_FIELDS = ("text", "rx", "tx", "system", "connected", "error", "pending", "idle")
 

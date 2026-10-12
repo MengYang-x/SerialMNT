@@ -4,9 +4,9 @@ from threading import Condition
 
 import serial
 
-from qserialtool.application import SessionController, SessionControllerOptions
-from qserialtool.domain import SerialConfig, SessionState
-from qserialtool.infrastructure import SerialTransport, SystemClock
+from serialmnt.application import SessionController, SessionControllerOptions
+from serialmnt.domain import SerialConfig, SessionState
+from serialmnt.infrastructure import SerialTransport, SystemClock
 
 
 def _loop_factory(**settings: object) -> serial.SerialBase:

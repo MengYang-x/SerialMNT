@@ -6,9 +6,9 @@ from pathlib import Path
 import pytest
 from tests.fixtures.fakes import FakeClock, FakeTransport
 
-from qserialtool.application import LogService, SessionController, SessionControllerOptions
-from qserialtool.domain import LogIOError, LogRecord, SerialConfig
-from qserialtool.infrastructure import TxtLogSink
+from serialmnt.application import LogService, SessionController, SessionControllerOptions
+from serialmnt.domain import LogIOError, LogRecord, SerialConfig
+from serialmnt.infrastructure import TxtLogSink
 
 
 def test_log_service_creates_file_and_flushes_on_close(tmp_path: Path) -> None:
@@ -20,7 +20,7 @@ def test_log_service_creates_file_and_flushes_on_close(tmp_path: Path) -> None:
     service.write(record)
     service.close()
 
-    assert path.name.startswith("QSerialTool_COM_1_")
+    assert path.name.startswith("SerialMNT_COM_1_")
     assert "hello" in path.read_text(encoding="utf-8")
 
 
@@ -208,7 +208,7 @@ def test_log_service_validates_factory_and_uses_default_directory(
         LogService(sink_factory=None, clock=FakeClock())  # type: ignore[arg-type]
 
     monkeypatch.setattr(
-        "qserialtool.application.log_service.default_log_directory",
+        "serialmnt.application.log_service.default_log_directory",
         lambda: tmp_path,
     )
     sink = RecordingSink()
@@ -217,4 +217,4 @@ def test_log_service_validates_factory_and_uses_default_directory(
     service.close()
 
     assert path.parent == tmp_path
-    assert path.name.startswith("QSerialTool_unknown-port_")
+    assert path.name.startswith("SerialMNT_unknown-port_")

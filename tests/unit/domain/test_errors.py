@@ -2,7 +2,7 @@
 
 import pytest
 
-from qserialtool.domain import (
+from serialmnt.domain import (
     DomainError,
     ErrorCode,
     HexFormatError,

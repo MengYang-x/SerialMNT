@@ -2,7 +2,7 @@
 
 import pytest
 
-from qserialtool.domain import TerminalScreen, TerminalStyle, ValidationError
+from serialmnt.domain import TerminalScreen, TerminalStyle, ValidationError
 
 
 def test_plain_text_creates_lines() -> None:

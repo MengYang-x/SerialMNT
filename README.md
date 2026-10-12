@@ -1,8 +1,8 @@
-# QSerialTool
+# SerialMNT
 
-QSerialTool 是一个面向开发者与测试人员的跨平台串口调试助手。项目计划支持多标签串口会话、文本与 HEX 收发、日志导出、周期发送，以及 Windows 和 Linux 单文件分发。
+SerialMNT 是一个面向开发者与测试人员的跨平台串口调试助手。项目计划支持多标签串口会话、文本与 HEX 收发、日志导出、周期发送，以及 Windows 和 Linux 单文件分发。
 
-> 远程仓库：<https://github.com/Queqiongtao/QSerialTool>
+> 远程仓库：<https://github.com/Queqiongtao/SerialMNT>
 
 ## 当前状态
 
@@ -65,12 +65,12 @@ Linux 环境将命令中的解释器路径替换为 `./.venv/bin/python`。
 ## 运行程序
 
 ```powershell
-.\.venv\Scripts\python.exe -m qserialtool
+.\.venv\Scripts\python.exe -m serialmnt
 ```
 
-Linux 环境使用 `./.venv/bin/python -m qserialtool`。
+Linux 环境使用 `./.venv/bin/python -m serialmnt`。
 
-本工程是 src 布局，包位于 `src/qserialtool/`，必须用 `-m` 模块方式启动。直接执行 `python src/qserialtool/__main__.py` 会报 `ModuleNotFoundError: No module named 'qserialtool'`：脚本方式执行时 Python 把脚本所在目录 `src/qserialtool/` 而非 `src/` 加入模块搜索路径，顶层包因此不可见。这是运行方式问题，不需要修改入口文件。
+本工程是 src 布局，包位于 `src/serialmnt/`，必须用 `-m` 模块方式启动。直接执行 `python src/serialmnt/__main__.py` 会报 `ModuleNotFoundError: No module named 'serialmnt'`：脚本方式执行时 Python 把脚本所在目录 `src/serialmnt/` 而非 `src/` 加入模块搜索路径，顶层包因此不可见。这是运行方式问题，不需要修改入口文件。
 
 ## 质量检查
 

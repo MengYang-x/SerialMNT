@@ -8,7 +8,7 @@ if [ -x "$ROOT/.venv/Scripts/python.exe" ]; then
 elif [ -x "$ROOT/.venv/bin/python" ]; then
   PYTHON="$ROOT/.venv/bin/python"
 else
-  echo "QSerialTool virtual environment not found under $ROOT/.venv" >&2
+  echo "SerialMNT virtual environment not found under $ROOT/.venv" >&2
   exit 1
 fi
 
