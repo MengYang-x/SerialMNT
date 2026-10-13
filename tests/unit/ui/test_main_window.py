@@ -1471,12 +1471,71 @@ def test_main_window_uses_single_row_header(qtbot: object) -> None:
     assert corner is not None
     assert window.theme_combo.parentWidget() is corner
     assert window.font_combo.parentWidget() is corner
-    assert window.new_tab_button.parentWidget() is corner
     assert window.menu_button.parentWidget() is corner
     assert window.theme_combo.isVisible()
     assert window.font_combo.isVisible()
+    assert window.new_tab_button.parentWidget() is window.tabs.tabBar()
     assert window.new_tab_button.isVisible()
     assert window.menu_button.isVisible()
+    window.close()
+
+
+def test_new_session_button_follows_last_tab(qtbot: object) -> None:
+    transport = FakeTransport()
+    window = _window(qtbot, transport)
+    bar = window.tabs.tabBar()
+    button = window.new_tab_button
+
+    assert button.geometry().left() == bar.tabRect(0).right() + 1
+
+    window.new_session()
+    first_right = bar.tabRect(0).right()
+    last_right = bar.tabRect(bar.count() - 1).right()
+    assert last_right > first_right
+    assert button.geometry().left() == last_right + 1
+    assert button.geometry().right() <= bar.width()
+
+    window._close_tab(bar.count() - 1)
+    assert button.geometry().left() == bar.tabRect(bar.count() - 1).right() + 1
+
+    window._close_tab(0)
+    assert bar.count() == 0
+    assert button.geometry().left() == 0
+    window.close()
+
+
+def test_new_session_button_follows_tab_rename(qtbot: object) -> None:
+    transport = FakeTransport()
+    window = _window(qtbot, transport)
+    bar = window.tabs.tabBar()
+    button = window.new_tab_button
+
+    window.tabs.setTabText(0, "一个明显更长的会话名称")
+    qtbot.waitUntil(lambda: bar.tabRect(0).width() > button.width() * 2, timeout=2000)
+
+    assert button.geometry().left() == bar.tabRect(0).right() + 1
+    window.close()
+
+
+def test_new_session_button_hidden_when_tabs_do_not_fit(qtbot: object) -> None:
+    transport = FakeTransport()
+    window = _window(qtbot, transport)
+    window.resize(900, 600)
+    bar = window.tabs.tabBar()
+
+    for _ in range(20):
+        window.new_session()
+
+    # 标签溢出后标签栏会滚动，末位标签右边缘之外已放不下按钮。
+    last_right = bar.tabRect(bar.count() - 1).right()
+    assert last_right + 1 + window.new_tab_button.sizeHint().width() > bar.width()
+    assert not window.new_tab_button.isVisible()
+
+    while window.tabs.count() > 1:
+        window._close_tab(window.tabs.count() - 1)
+
+    qtbot.waitUntil(lambda: window.new_tab_button.isVisible(), timeout=2000)
+    assert window.new_tab_button.geometry().left() == bar.tabRect(0).right() + 1
     window.close()
 
 

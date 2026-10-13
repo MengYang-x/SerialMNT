@@ -4,7 +4,14 @@ from collections.abc import Callable
 from dataclasses import replace
 
 from PySide6.QtCore import QByteArray, QEvent, QObject, QPoint, Qt, QTimer
-from PySide6.QtGui import QAction, QCloseEvent, QContextMenuEvent, QKeySequence, QMouseEvent
+from PySide6.QtGui import (
+    QAction,
+    QCloseEvent,
+    QContextMenuEvent,
+    QKeySequence,
+    QMouseEvent,
+    QResizeEvent,
+)
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -16,6 +23,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMenu,
     QMessageBox,
+    QTabBar,
     QTabWidget,
     QToolButton,
     QWidget,
@@ -52,6 +60,45 @@ _THEMES: tuple[tuple[str, Theme], ...] = (
 )
 
 
+class _SessionTabBar(QTabBar):
+    """把“新建会话”按钮紧贴在最后一个会话标签右侧的标签栏。
+
+    QTabBar 只在标签内提供 ``setTabButton`` 插槽，而标签右侧的关闭按钮已被占用，
+    因此按钮改为标签栏的子控件手动定位：标签增删、改名和标签栏缩放都会改变末位标签
+    的右边缘，统一在这些时机重新摆放（拖动重排不改变各标签宽度之和，无需处理）。
+    放不下时隐藏按钮，避免压住标签或滚动箭头，此时仍可通过 ☰ 菜单和 ``Ctrl+T``
+    新建会话。
+    """
+
+    def __init__(self, new_button: QToolButton, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._new_button = new_button
+        new_button.setParent(self)
+
+    def tabLayoutChange(self) -> None:
+        super().tabLayoutChange()
+        self._place_new_button()
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        self._place_new_button()
+
+    def _place_new_button(self) -> None:
+        hint = self._new_button.sizeHint()
+        count = self.count()
+        left = self.tabRect(count - 1).right() + 1 if count else 0
+        if left + hint.width() > self.width():
+            self._new_button.setVisible(False)
+            return
+        self._new_button.setVisible(True)
+        self._new_button.setGeometry(
+            left,
+            max((self.height() - hint.height()) // 2, 0),
+            hint.width(),
+            hint.height(),
+        )
+
+
 class MainWindow(QMainWindow):
     """管理多标签会话的顶层窗口。"""
 
@@ -85,6 +132,13 @@ class MainWindow(QMainWindow):
         self._save_timer.setInterval(500)
         self._save_timer.timeout.connect(self._save_config)
         self.tabs = QTabWidget()
+        self.new_tab_button = QToolButton()
+        self.new_tab_button.setText("+")
+        self.new_tab_button.setAutoRaise(True)
+        self.new_tab_button.setToolTip("新建会话 (Ctrl+T)")
+        self.new_tab_button.clicked.connect(self._new_session)
+        # 必须先换标签栏再设置属性：setTabBar 不会把关闭按钮和拖动属性带到新标签栏。
+        self.tabs.setTabBar(_SessionTabBar(self.new_tab_button))
         self.tabs.setTabsClosable(True)
         self.tabs.setMovable(True)
         self.tabs.tabCloseRequested.connect(self._close_tab)
@@ -144,12 +198,6 @@ class MainWindow(QMainWindow):
 
         self.font_combo = self._build_font_combo()
 
-        self.new_tab_button = QToolButton()
-        self.new_tab_button.setText("+")
-        self.new_tab_button.setAutoRaise(True)
-        self.new_tab_button.setToolTip("新建会话 (Ctrl+T)")
-        self.new_tab_button.clicked.connect(self._new_session)
-
         self.tabs.setDocumentMode(True)
         self._header_tools = QWidget()
         header_layout = QHBoxLayout(self._header_tools)
@@ -159,7 +207,6 @@ class MainWindow(QMainWindow):
         header_layout.addWidget(self.theme_combo)
         header_layout.addWidget(QLabel("字号"))
         header_layout.addWidget(self.font_combo)
-        header_layout.addWidget(self.new_tab_button)
         header_layout.addWidget(self.menu_button)
         self.tabs.setCornerWidget(self._header_tools, Qt.Corner.TopRightCorner)
         # 设置角落控件会重新挂载父级并隐藏控件，必须显式显示。
