@@ -64,8 +64,8 @@ class SerialConfig:
     parity: Parity = "N"
     stopbits: float = 1.0
     flow_control: FlowControl = "none"
-    dtr: bool = True
-    rts: bool = True
+    dtr: bool = False
+    rts: bool = False
     encoding: EncodingName = "utf-8"
 
     def __post_init__(self) -> None:

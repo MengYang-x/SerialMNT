@@ -46,8 +46,8 @@ def test_serial_config_defaults() -> None:
     assert config.parity == "N"
     assert config.stopbits == 1.0
     assert config.flow_control == "none"
-    assert config.dtr is True
-    assert config.rts is True
+    assert config.dtr is False
+    assert config.rts is False
     assert config.encoding == "utf-8"
 
 

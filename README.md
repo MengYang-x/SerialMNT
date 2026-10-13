@@ -2,7 +2,7 @@
 
 SerialMNT 是一个面向开发者与测试人员的跨平台串口调试助手。项目计划支持多标签串口会话、文本与 HEX 收发、日志导出、周期发送，以及 Windows 和 Linux 单文件分发。
 
-> 远程仓库：<https://github.com/Queqiongtao/SerialMNT>
+> 原作者：<https://github.com/Queqiongtao/QSerialTool>
 
 ## 当前状态
 

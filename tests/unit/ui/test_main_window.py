@@ -1210,6 +1210,42 @@ def test_wrap_enabled_restored_from_config(qtbot: object) -> None:
         window.close()
 
 
+def test_line_state_never_restored_from_config(qtbot: object) -> None:
+    transport = FakeTransport()
+    manager = SessionManager(transport_factory=lambda: transport, clock=FakeClock())
+    preferences = SessionPreferences(
+        title="COM1",
+        config=SerialConfig(port="COM1", dtr=True, rts=True),
+        display_mode="text",
+        show_timestamp=True,
+        show_rx=True,
+        show_tx=True,
+        autoscroll=True,
+    )
+    config = AppConfig(
+        schema_version=1,
+        theme="system",
+        window_geometry=None,
+        window_state=None,
+        active_session_index=0,
+        sessions=(preferences,),
+    )
+    window = MainWindow(
+        session_manager=manager,
+        port_provider=lambda: (PortInfo(device="COM1"),),
+        initial_config=config,
+    )
+    qtbot.addWidget(window)
+    window.show()
+    tab = _current_tab(window)
+
+    try:
+        assert tab.connection_panel.dtr_check.isChecked() is False
+        assert tab.connection_panel.rts_check.isChecked() is False
+    finally:
+        window.close()
+
+
 def test_new_session_inherits_current_font_size(qtbot: object) -> None:
     transport = FakeTransport()
     window = _window(qtbot, transport)

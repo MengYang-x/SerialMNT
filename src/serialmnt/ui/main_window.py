@@ -1,6 +1,7 @@
 """SerialMNT 主窗口。"""
 
 from collections.abc import Callable
+from dataclasses import replace
 
 from PySide6.QtCore import QByteArray, QEvent, QObject, QPoint, Qt, QTimer
 from PySide6.QtGui import QAction, QCloseEvent, QContextMenuEvent, QKeySequence, QMouseEvent
@@ -236,7 +237,10 @@ class MainWindow(QMainWindow):
         if config.window_state:
             self.restoreState(QByteArray.fromBase64(config.window_state.encode("ascii")))
         for preferences in config.sessions:
-            self.new_session(preferences)
+            # DTR/RTS 不恢复上次保存的状态：每次启动都从未勾选开始。
+            self.new_session(
+                replace(preferences, config=replace(preferences.config, dtr=False, rts=False))
+            )
         self.tabs.setCurrentIndex(config.active_session_index)
 
     def new_session(self, preferences: SessionPreferences | None = None) -> SessionTab:
