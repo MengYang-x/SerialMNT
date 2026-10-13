@@ -43,6 +43,19 @@ _ENCODINGS = (
 # 自动枚举周期放宽到 30 s，热插拔主要靠端口行右侧的刷新按钮即时感知。
 _PORT_REFRESH_INTERVAL_MS = 30_000
 
+_BUTTON_LABELS = {
+    SessionState.DISCONNECTED: "连接",
+    SessionState.CONNECTING: "正在连接",
+    SessionState.CONNECTED: "断开",
+    SessionState.DISCONNECTING: "正在断开",
+    SessionState.ERROR: "重试",
+    SessionState.CLOSED: "已关闭",
+}
+
+# 连接与断开通常几十毫秒就完成，中间态文案延迟显示，避免文字一闪而过。
+_PENDING_STATES = (SessionState.CONNECTING, SessionState.DISCONNECTING)
+_PENDING_LABEL_DELAY_MS = 200
+
 
 class ConnectionPanel(QGroupBox):
     config_changed = Signal()
@@ -67,6 +80,11 @@ class ConnectionPanel(QGroupBox):
         self._port_timer.setInterval(_PORT_REFRESH_INTERVAL_MS)
         self._port_timer.timeout.connect(self._refresh_ports)
         self._port_timer.start()
+        self._pending_state: SessionState | None = None
+        self._pending_timer = QTimer(self)
+        self._pending_timer.setSingleShot(True)
+        self._pending_timer.setInterval(_PENDING_LABEL_DELAY_MS)
+        self._pending_timer.timeout.connect(self._show_pending_label)
         self._refresh_ports()
         self.apply_snapshot(controller.snapshot)
 
@@ -127,6 +145,7 @@ class ConnectionPanel(QGroupBox):
         self.rts_check = QCheckBox("RTS")
         self.connect_button = QPushButton("连接")
         self.connect_button.setProperty("primary", True)
+        self.connect_button.setProperty("connected", False)
         self.connect_button.clicked.connect(self._toggle_connection)
         self.dtr_check.toggled.connect(self._line_state_changed)
         self.rts_check.toggled.connect(self._line_state_changed)
@@ -160,18 +179,34 @@ class ConnectionPanel(QGroupBox):
                     self.port_combo.setEditText(snapshot.config.port)
             self._set_editable(snapshot.state in {SessionState.DISCONNECTED, SessionState.ERROR})
             self.connect_button.setEnabled(snapshot.state is not SessionState.DISCONNECTING)
-            button_labels = {
-                SessionState.DISCONNECTED: "连接",
-                SessionState.CONNECTING: "正在连接",
-                SessionState.CONNECTED: "断开",
-                SessionState.DISCONNECTING: "正在断开",
-                SessionState.ERROR: "重试",
-                SessionState.CLOSED: "已关闭",
-            }
-            self.connect_button.setText(button_labels[snapshot.state])
+            if snapshot.state in _PENDING_STATES:
+                if self._pending_state is not snapshot.state:
+                    self._pending_state = snapshot.state
+                    self._pending_timer.start()
+            else:
+                self._pending_state = None
+                self._pending_timer.stop()
+                self.connect_button.setText(_BUTTON_LABELS[snapshot.state])
+            self._set_connected(
+                snapshot.state in {SessionState.CONNECTED, SessionState.DISCONNECTING}
+            )
             self._update_port_tooltip()
         finally:
             self._updating = False
+
+    def _show_pending_label(self) -> None:
+        """中间态持续超过阈值时，才把等待文案显示到按钮上。"""
+        if self._pending_state is not None:
+            self.connect_button.setText(_BUTTON_LABELS[self._pending_state])
+
+    def _set_connected(self, connected: bool) -> None:
+        """切换连接按钮的红底样式；动态属性变更后需重新 polish 才生效。"""
+        if self.connect_button.property("connected") is connected:
+            return
+        self.connect_button.setProperty("connected", connected)
+        style = self.connect_button.style()
+        style.unpolish(self.connect_button)
+        style.polish(self.connect_button)
 
     def _toggle_connection(self) -> None:
         state = self._controller.state

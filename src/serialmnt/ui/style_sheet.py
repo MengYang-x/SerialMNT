@@ -28,6 +28,9 @@ class ThemeTokens:
     accent_fill_hover: str
     accent_fill_pressed: str
     accent_soft: str
+    danger_fill: str
+    danger_fill_hover: str
+    danger_fill_pressed: str
 
 
 _TOKENS: dict[str, ThemeTokens] = {
@@ -46,6 +49,9 @@ _TOKENS: dict[str, ThemeTokens] = {
         accent_fill_hover="#1D4ED8",
         accent_fill_pressed="#1E40AF",
         accent_soft="#EAF0FE",
+        danger_fill="#DC2626",
+        danger_fill_hover="#B91C1C",
+        danger_fill_pressed="#991B1B",
     ),
     "dark": ThemeTokens(
         window="#1B1D21",
@@ -63,6 +69,9 @@ _TOKENS: dict[str, ThemeTokens] = {
         accent_fill_hover="#3B82F6",
         accent_fill_pressed="#1D4ED8",
         accent_soft="#1E2A3D",
+        danger_fill="#DC2626",
+        danger_fill_hover="#B91C1C",
+        danger_fill_pressed="#991B1B",
     ),
 }
 
@@ -271,6 +280,19 @@ QPushButton[primary="true"]:disabled {{
     background: {c.border};
     color: {c.muted};
     border-color: {c.border};
+}}
+QPushButton[primary="true"][connected="true"] {{
+    background: {c.danger_fill};
+    color: #FFFFFF;
+    border: 1px solid {c.danger_fill};
+}}
+QPushButton[primary="true"][connected="true"]:hover {{
+    background: {c.danger_fill_hover};
+    border-color: {c.danger_fill_hover};
+}}
+QPushButton[primary="true"][connected="true"]:pressed {{
+    background: {c.danger_fill_pressed};
+    border-color: {c.danger_fill_pressed};
 }}
 
 QToolButton {{

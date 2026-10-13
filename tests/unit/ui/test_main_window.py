@@ -1,5 +1,6 @@
 """测试主窗口、连接面板、收发面板和多标签交互。"""
 
+import time
 from datetime import datetime, timezone
 
 from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
@@ -1566,6 +1567,60 @@ def test_status_indicator_tracks_session_state(qtbot: object, monkeypatch: objec
         _connect(qtbot, tab)
         assert data_colors().connected in tab.state_indicator.styleSheet()
     finally:
+        _disconnect(qtbot, tab)
+        window.close()
+
+
+def test_connect_button_marks_connected_state(qtbot: object, monkeypatch: object) -> None:
+    """连接后按钮切到红底样式，断开后恢复，便于一眼区分状态。"""
+    transport = FakeTransport()
+    window = _window(qtbot, transport)
+    tab = _current_tab(window)
+    monkeypatch.setattr(QMessageBox, "warning", lambda *args, **kwargs: None)
+    button = tab.connection_panel.connect_button
+
+    try:
+        assert button.property("connected") is False
+        _connect(qtbot, tab)
+        assert button.property("connected") is True
+        _disconnect(qtbot, tab)
+        qtbot.waitUntil(lambda: button.property("connected") is False, timeout=2000)
+    finally:
+        _disconnect(qtbot, tab)
+        window.close()
+
+
+class _SlowOpenTransport(FakeTransport):
+    """模拟打开较慢的串口，用于验证中间态文案的延迟显示。"""
+
+    def __init__(self, *, delay: float) -> None:
+        super().__init__()
+        self._delay = delay
+
+    def open(self, config: SerialConfig) -> None:
+        time.sleep(self._delay)
+        super().open(config)
+
+
+def test_connect_button_delays_pending_label(qtbot: object, monkeypatch: object) -> None:
+    """慢速连接才显示「正在连接」，快速连接不会让按钮文字闪一下。"""
+    transport = _SlowOpenTransport(delay=0.5)
+    window = _window(qtbot, transport)
+    tab = _current_tab(window)
+    monkeypatch.setattr(QMessageBox, "warning", lambda *args, **kwargs: None)
+    panel = tab.connection_panel
+
+    try:
+        panel.port_combo.setEditText("COM1")
+        panel.baud_combo.setEditText("9600")
+        qtbot.mouseClick(panel.connect_button, Qt.MouseButton.LeftButton)
+        qtbot.waitUntil(lambda: tab.controller.state is SessionState.CONNECTING, timeout=2000)
+        qtbot.wait(60)  # 等 CONNECTING 快照送达界面，此时仍在延迟阈值内
+        assert panel.connect_button.text() == "连接"
+        qtbot.waitUntil(lambda: panel.connect_button.text() == "正在连接", timeout=2000)
+        qtbot.waitUntil(lambda: panel.connect_button.text() == "断开", timeout=2000)
+    finally:
+        qtbot.waitUntil(lambda: tab.controller.state is not SessionState.CONNECTING, timeout=2000)
         _disconnect(qtbot, tab)
         window.close()
 

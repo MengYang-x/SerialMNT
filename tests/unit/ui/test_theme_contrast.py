@@ -167,6 +167,7 @@ def test_token_text_colors_meet_contrast_targets(theme_name: str) -> None:
             value = getattr(colors, field)
             assert _contrast(value, surface) >= 4.5, f"{theme_name} {field} on {surface}"
     assert _contrast("#FFFFFF", colors.accent_fill) >= 4.5
+    assert _contrast("#FFFFFF", colors.danger_fill) >= 4.5
 
 
 @pytest.mark.parametrize("theme_name", ["light", "dark"])
