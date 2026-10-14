@@ -10,9 +10,10 @@ from PySide6.QtWidgets import QApplication
 
 from serialmnt.ui import apply_theme, data_colors, resolved_theme
 from serialmnt.ui.style_sheet import assets_dir, build_stylesheet, tokens
-from serialmnt.ui.theme_manager import ansi_color, highlight_colors
+from serialmnt.ui.theme_manager import ansi_color, highlight_colors, status_colors
 
-_DATA_COLOR_FIELDS = ("text", "rx", "tx", "system", "connected", "error", "pending", "idle")
+_DATA_COLOR_FIELDS = ("text", "rx", "tx", "system")
+_STATUS_FIELDS = ("connected", "error", "standby")
 
 
 def _channel(value: int) -> float:
@@ -53,6 +54,17 @@ def test_data_colors_meet_contrast_targets(app: QApplication, theme_name: str) -
     for field in _DATA_COLOR_FIELDS:
         value = getattr(colors, field)
         assert _contrast(value, background) >= 4.5, f"{theme_name} {field}={value}"
+
+
+@pytest.mark.parametrize("theme_name", ["light", "dark"])
+def test_status_dot_colors_meet_contrast_targets(app: QApplication, theme_name: str) -> None:
+    """圆点没有描边，填充色本身要与状态条底色拉开对比。"""
+    apply_theme(app, theme_name)
+    background = tokens(theme_name).subtle
+    colors = status_colors()
+    for field in _STATUS_FIELDS:
+        value = getattr(colors, field)
+        assert _contrast(value, background) >= 3.0, f"{theme_name} {field}={value}"
 
 
 @pytest.mark.parametrize("theme_name", ["light", "dark"])

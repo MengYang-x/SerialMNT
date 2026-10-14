@@ -36,16 +36,21 @@ def _palette_roles(colors: ThemeTokens) -> tuple[tuple[QPalette.ColorRole, str],
 
 @dataclass(frozen=True, slots=True)
 class DataColors:
-    """当前主题下数据区与状态指示使用的颜色。"""
+    """当前主题下数据区文字使用的颜色。"""
 
     text: str
     rx: str
     tx: str
     system: str
+
+
+@dataclass(frozen=True, slots=True)
+class StatusColors:
+    """状态圆点的填充色；圆点不描边，色值本身要与状态条底色拉开对比。"""
+
     connected: str
     error: str
-    pending: str
-    idle: str
+    standby: str
 
 
 _THEME_COLORS: dict[str, DataColors] = {
@@ -54,20 +59,26 @@ _THEME_COLORS: dict[str, DataColors] = {
         rx="#14713d",
         tx="#1f5fa8",
         system="#666666",
-        connected="#14713d",
-        error="#b3261e",
-        pending="#8a5a00",
-        idle="#666666",
     ),
     "dark": DataColors(
         text="#e6e8eb",
         rx="#5cc98c",
         tx="#6fb3f2",
         system="#a3a9b0",
+    ),
+}
+
+# 圆点不描边，浅色主题的色值都取到刚好满足 3:1 的最亮一档，深色主题可以直接用亮色。
+_STATUS_COLORS: dict[str, StatusColors] = {
+    "light": StatusColors(
+        connected="#2e9e5b",
+        error="#e5484d",
+        standby="#b7791f",
+    ),
+    "dark": StatusColors(
         connected="#5cc98c",
         error="#ff8a80",
-        pending="#ffc14d",
-        idle="#8f959c",
+        standby="#ffc14d",
     ),
 }
 
@@ -174,8 +185,13 @@ def resolved_theme() -> str:
 
 
 def data_colors() -> DataColors:
-    """返回当前主题的数据区与状态指示颜色。"""
+    """返回当前主题的数据区文字颜色。"""
     return _THEME_COLORS[_ThemeState.resolved]
+
+
+def status_colors() -> StatusColors:
+    """返回当前主题的状态圆点配色。"""
+    return _STATUS_COLORS[_ThemeState.resolved]
 
 
 def ansi_colors() -> tuple[str, ...]:

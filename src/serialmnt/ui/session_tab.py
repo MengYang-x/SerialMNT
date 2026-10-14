@@ -33,12 +33,15 @@ from serialmnt.ui.log_panel import LogPanel
 from serialmnt.ui.qt_bridge import QtSessionBridge
 from serialmnt.ui.receive_panel import ReceivePanel
 from serialmnt.ui.send_panel import SendPanel
-from serialmnt.ui.theme_manager import data_colors
+from serialmnt.ui.theme_manager import status_colors
 
 # 侧栏宽度约束：默认略窄，避免拖动后留下大片横向空白；下限与领域模型保持一致。
 _SIDEBAR_MIN_WIDTH = 260
 _SIDEBAR_MAX_WIDTH = 360
 _SIDEBAR_DEFAULT_WIDTH = 272
+
+# 状态圆点直径（含 1px 描边），与状态条文字高度相称。
+_DOT_DIAMETER = 10
 
 _STATE_LABELS = {
     SessionState.DISCONNECTED: "未连接",
@@ -289,7 +292,10 @@ class SessionTab(QWidget):
         self.layout_splitter.splitterMoved.connect(self._splitter_moved)
 
     def _build_status_strip(self) -> None:
-        self.state_indicator = QLabel("●")
+        # 状态点画成固定尺寸的实心圆而不是 “●” 字形，比字形更大更醒目。
+        self.state_indicator = QFrame()
+        self.state_indicator.setObjectName("statusDot")
+        self.state_indicator.setFixedSize(_DOT_DIAMETER, _DOT_DIAMETER)
         self.status_label = QLabel()
         self.status_label.setObjectName("statusText")
         self.status_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
@@ -340,19 +346,19 @@ class SessionTab(QWidget):
         self.status_label.setText(status_text)
         self.status_label.setToolTip(status_text)
         self.state_indicator.setStyleSheet(
-            f"color: {self._state_color(snapshot.state)}; font-weight: bold;"
+            f"background-color: {self._state_color(snapshot.state)};"
+            f" border-radius: {_DOT_DIAMETER // 2}px;"
         )
 
     @staticmethod
     def _state_color(state: SessionState) -> str:
-        colors = data_colors()
+        """已连接为绿色，错误为红色，其余（未连接、已关闭、连接中、断开中）为黄色。"""
+        colors = status_colors()
         if state is SessionState.CONNECTED:
             return colors.connected
         if state is SessionState.ERROR:
             return colors.error
-        if state in {SessionState.CONNECTING, SessionState.DISCONNECTING}:
-            return colors.pending
-        return colors.idle
+        return colors.standby
 
     def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)

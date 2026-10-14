@@ -45,6 +45,7 @@ from serialmnt.ui.theme_manager import (
     ansi_color,
     data_font,
     highlight_colors,
+    status_colors,
 )
 
 
@@ -1563,9 +1564,9 @@ def test_status_indicator_tracks_session_state(qtbot: object, monkeypatch: objec
     monkeypatch.setattr(QMessageBox, "warning", lambda *args, **kwargs: None)
 
     try:
-        assert data_colors().idle in tab.state_indicator.styleSheet()
+        assert status_colors().standby in tab.state_indicator.styleSheet()
         _connect(qtbot, tab)
-        assert data_colors().connected in tab.state_indicator.styleSheet()
+        assert status_colors().connected in tab.state_indicator.styleSheet()
     finally:
         _disconnect(qtbot, tab)
         window.close()
