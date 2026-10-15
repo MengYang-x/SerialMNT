@@ -60,6 +60,31 @@ def test_send_panel_remembers_history_and_sends_periodically(qtbot: object) -> N
     controller.disconnect()
 
 
+def test_send_panel_editor_height_follows_content(qtbot: object) -> None:
+    """输入框随内容长高，超过上限后不再长高。"""
+    transport = FakeTransport()
+    controller, _ = _connected_controller(transport)
+    panel = SendPanel(controller=controller)
+    qtbot.addWidget(panel)
+
+    single_line = panel.editor.height()
+    assert single_line < 60  # 单行内容不再占住原来的 120px
+
+    panel.editor.setPlainText("a\nb\nc")
+    qtbot.waitUntil(lambda: panel.editor.height() > single_line, timeout=2000)
+    three_lines = panel.editor.height()
+
+    panel.editor.setPlainText("\n".join(str(index) for index in range(20)))
+    qtbot.waitUntil(lambda: panel.editor.height() > three_lines, timeout=2000)
+    capped = panel.editor.height()
+
+    panel.editor.setPlainText("\n".join(str(index) for index in range(60)))
+    qtbot.wait(100)
+    assert panel.editor.height() == capped
+
+    controller.disconnect()
+
+
 def test_send_panel_send_content_uses_mode_and_newline(
     qtbot: object,
     monkeypatch: object,

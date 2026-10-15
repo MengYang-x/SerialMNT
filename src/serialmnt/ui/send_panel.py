@@ -29,6 +29,8 @@ from serialmnt.domain import (
 )
 from serialmnt.ui.theme_manager import CONTROL_HEIGHT_PX, data_font
 
+_EDITOR_MAX_LINES = 5  # 发送输入框最多长到几行高，再多转为内部滚动
+
 _NEWLINES: tuple[tuple[str, LineEnding], ...] = (
     ("无换行", "none"),
     ("CR", "cr"),
@@ -68,6 +70,8 @@ class SendPanel(QWidget):
         self.options_row = self._build_options()
         layout.addWidget(self.options_row)
         layout.addWidget(self._build_editor())
+        # 输入框按内容定高，面板不再随之撑满，多出的高度留给接收区。
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         self._periodic_timer = QTimer(self)
         self._periodic_timer.timeout.connect(self._periodic_tick)
 
@@ -132,11 +136,39 @@ class SendPanel(QWidget):
     def _build_editor(self) -> QPlainTextEdit:
         self.editor = QPlainTextEdit()
         self.editor.setPlaceholderText("输入待发送内容，按 Ctrl+Enter 发送")
-        self.editor.setMinimumHeight(120)
         self.editor.setFont(data_font())
+        # 文档布局还没算完就量行高会得到空值，等事件循环下一轮再量。
+        self._height_timer = QTimer(self)
+        self._height_timer.setSingleShot(True)
+        self._height_timer.timeout.connect(self._sync_editor_height)
+        self.editor.document().documentLayout().documentSizeChanged.connect(
+            lambda _size: self._height_timer.start(0)
+        )
+        self._sync_editor_height()
         shortcut = QShortcut(QKeySequence("Ctrl+Return"), self.editor)
         shortcut.activated.connect(self.send)
         return self.editor
+
+    def _sync_editor_height(self) -> None:
+        """让输入框高度跟随内容，超过 _EDITOR_MAX_LINES 行后改为内部滚动。"""
+        document = self.editor.document()
+        layout = document.documentLayout()
+        # 一个块可能折成多行，blockBoundingRect() 给出它实际占用的高度；中英文字形
+        # 行高不同，累加比按「行数 × 行距」估算更准。末块的包围盒多算了一个文档
+        # 边距（给光标落脚），先扣掉。
+        content = -document.documentMargin()
+        block = document.firstBlock()
+        while block.isValid():
+            content += layout.blockBoundingRect(block).height()
+            block = block.next()
+        # 上限按实际平均行高换算：中文字形比英文高，用字体行距算会截断最后一行。
+        lines = max(document.size().height(), 1)
+        height = min(content, _EDITOR_MAX_LINES * content / lines)
+        self.editor.ensurePolished()
+        # 边框、样式表内边距和文档边距都会占掉一部分高度。
+        chrome = 2 * (document.documentMargin() + self.editor.frameWidth())
+        # 内容刚好占满时 Qt 仍判定为可滚动，多留 1px 让最后一行不被滚动条遮住。
+        self.editor.setFixedHeight(int(height + chrome) + 1)
 
     def _connect_changes(self) -> None:
         self.mode_combo.currentIndexChanged.connect(self._settings_changed)
@@ -202,6 +234,7 @@ class SendPanel(QWidget):
     def set_data_font_size(self, size: int) -> None:
         """按全局字号更新发送编辑框字体。"""
         self.editor.setFont(data_font(size))
+        self._height_timer.start(0)
 
     def send(self) -> None:
         """手动发送编辑器中的当前内容。"""
