@@ -9,6 +9,7 @@ from PySide6.QtGui import (
     QFont,
     QKeyEvent,
     QKeySequence,
+    QMouseEvent,
     QPainter,
     QPaintEvent,
     QPalette,
@@ -16,7 +17,7 @@ from PySide6.QtGui import (
     QTextCursor,
     QTextOption,
 )
-from PySide6.QtWidgets import QMenu, QPlainTextEdit, QWidget
+from PySide6.QtWidgets import QApplication, QMenu, QPlainTextEdit, QWidget
 
 from serialmnt.domain import TerminalCell, TerminalScreen, TerminalStyle
 from serialmnt.ui.terminal_highlight import find_highlights
@@ -40,6 +41,7 @@ class TerminalOutput(QPlainTextEdit):
         self._submit_handler: Callable[[str], bool] | None = None
         self._history_index: int | None = None
         self._autoscroll = True
+        self._mouse_pressed = False
         self._batch_update = False
         self._highlight_enabled = True
         self._deferred_render = False
@@ -149,7 +151,7 @@ class TerminalOutput(QPlainTextEdit):
         if not self._terminal_mode:
             return
         self._screen = screen
-        if self.textCursor().hasSelection():
+        if self.textCursor().hasSelection() or self._mouse_held():
             self._deferred_render = True
             return
         self._render_current_screen()
@@ -320,8 +322,8 @@ class TerminalOutput(QPlainTextEdit):
         self.setTextCursor(caret)
 
     def _scroll_after_update(self) -> None:
-        """自动滚动到末尾；存在选中内容或正在滚动时保持原位。"""
-        if not self._autoscroll or self._scrolling:
+        """自动滚动到末尾；存在选中内容、正在滚动或按住鼠标时保持原位。"""
+        if not self._autoscroll or self._scrolling or self._mouse_held():
             return
         if self.textCursor().hasSelection():
             return
@@ -334,7 +336,12 @@ class TerminalOutput(QPlainTextEdit):
 
     def _on_selection_changed(self) -> None:
         """选中被清除后补上暂停期间延迟的渲染与自动滚动。"""
-        if self._rendering or self._scrolling or self.textCursor().hasSelection():
+        if (
+            self._rendering
+            or self._scrolling
+            or self._mouse_held()
+            or self.textCursor().hasSelection()
+        ):
             return
         if self._deferred_render:
             self._render_current_screen()
@@ -380,6 +387,28 @@ class TerminalOutput(QPlainTextEdit):
         return cursor.hasSelection() and (
             cursor.selectionStart() < start or cursor.selectionEnd() > end
         )
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        """标记左键按下，让按住期间的更新避开拖动中的选区锚点。"""
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._mouse_pressed = True
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        """左键松开后补上按住期间延迟的渲染与自动滚动。"""
+        super().mouseReleaseEvent(event)
+        if event.button() != Qt.MouseButton.LeftButton:
+            return
+        self._mouse_pressed = False
+        self._on_selection_changed()
+
+    def _mouse_held(self) -> bool:
+        """本控件上按下的左键是否仍按住，用于暂停随数据到达的滚动与重绘。
+
+        终端视图里从选区内部拖动会启动 Qt 内部拖拽，拖拽期间收不到释放事件，
+        因此除了本控件按下的标记，还要确认左键在全局仍处于按下状态，避免暂停自我锁死。
+        """
+        return self._mouse_pressed and bool(QApplication.mouseButtons() & Qt.MouseButton.LeftButton)
 
     def contextMenuEvent(self, event: QContextMenuEvent) -> None:
         """接收区右键只提供复制与全选，避免剪切/删除改到日志内容。"""

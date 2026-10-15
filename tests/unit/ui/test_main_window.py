@@ -37,6 +37,7 @@ from serialmnt.domain import (
     SerialConfig,
     SessionPreferences,
     SessionState,
+    TerminalScreen,
 )
 from serialmnt.ui import MainWindow, ReceivePanel, SessionTab, data_colors
 from serialmnt.ui.terminal_output import TerminalOutput
@@ -1097,6 +1098,125 @@ def test_split_selection_survives_incoming_data(qtbot: object) -> None:
     finally:
         tab.controller.close(force=True)
         window.close()
+
+
+def _point_for_position(output: TerminalOutput, position: int) -> QPoint:
+    """返回文档某个位置在视口坐标下的点，用于模拟鼠标按下与拖动。"""
+    cursor = QTextCursor(output.document())
+    cursor.setPosition(position)
+    return output.cursorRect(cursor).center()
+
+
+def test_terminal_drag_selection_ignores_data_arriving_while_pressed(qtbot: object) -> None:
+    """回归：按住左键拖动期间到达的数据不得把选区一路扩到文档末尾。
+
+    ``_scroll_after_update()`` 用 ``moveCursor(End)`` 滚动到底，会连带把选区锚点搬到文末；
+    这次滚动若发生在按住左键、还没拖出选区的瞬间，随后拖动就会从按下点一直选到末尾。
+    """
+    output = TerminalOutput()
+    qtbot.addWidget(output)
+    output.resize(500, 200)
+    output.set_terminal_mode(True)
+    screen = TerminalScreen()
+    screen.feed("aaaa bbbb cccc\r\ndddd eeee ffff\r\ngggg hhhh iiii\r\n")
+    output.render_screen(screen)
+    output.show()
+
+    press_position = output.document().findBlockByNumber(1).position() + 4
+    start = _point_for_position(output, press_position)
+    QTest.mousePress(
+        output.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, start
+    )
+
+    screen.feed("new data arrives\r\n")
+    output.render_screen(screen)
+    QTest.mouseMove(output.viewport(), start + QPoint(40, 0))
+
+    cursor = output.textCursor()
+    assert cursor.anchor() == press_position
+    assert "\n" not in cursor.selectedText()
+    assert output.toPlainText() == "aaaa bbbb cccc\ndddd eeee ffff\ngggg hhhh iiii\n"
+
+    QTest.mouseRelease(
+        output.viewport(),
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+        start + QPoint(40, 0),
+    )
+    cleared = QTextCursor(output.document())
+    cleared.setPosition(0)
+    output.setTextCursor(cleared)
+    assert (
+        output.toPlainText() == "aaaa bbbb cccc\ndddd eeee ffff\ngggg hhhh iiii\nnew data arrives\n"
+    )
+
+
+def test_terminal_drag_after_cleared_selection_ignores_pending_render(qtbot: object) -> None:
+    """回归：按下左键清空既有选区时，不得在按下瞬间补做延迟的终端重建。"""
+    output = TerminalOutput()
+    qtbot.addWidget(output)
+    output.resize(500, 200)
+    output.set_terminal_mode(True)
+    screen = TerminalScreen()
+    screen.feed("aaaa bbbb cccc\r\ndddd eeee ffff\r\ngggg hhhh iiii\r\n")
+    output.render_screen(screen)
+    output.show()
+
+    selected = QTextCursor(output.document())
+    selected.setPosition(0)
+    selected.setPosition(4, QTextCursor.MoveMode.KeepAnchor)
+    output.setTextCursor(selected)
+    screen.feed("new data arrives\r\n")
+    output.render_screen(screen)
+
+    press_position = output.document().findBlockByNumber(1).position() + 4
+    start = _point_for_position(output, press_position)
+    QTest.mousePress(
+        output.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, start
+    )
+    assert output.toPlainText() == "aaaa bbbb cccc\ndddd eeee ffff\ngggg hhhh iiii\n"
+
+    QTest.mouseMove(output.viewport(), start + QPoint(40, 0))
+    cursor = output.textCursor()
+    assert cursor.anchor() == press_position
+    assert "\n" not in cursor.selectedText()
+
+    QTest.mouseRelease(
+        output.viewport(),
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+        start + QPoint(40, 0),
+    )
+
+
+def test_split_drag_selection_ignores_data_arriving_while_pressed(qtbot: object) -> None:
+    """回归：分栏视图按住左键拖动期间到达的新行不得把选区扩到文档末尾。"""
+    output = TerminalOutput()
+    qtbot.addWidget(output)
+    output.resize(500, 200)
+    for index in range(4):
+        output.append_text(f"line {index} aaaa bbbb", data_colors().text)
+    output.show()
+
+    press_position = output.document().findBlockByNumber(1).position() + 4
+    start = _point_for_position(output, press_position)
+    QTest.mousePress(
+        output.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, start
+    )
+
+    output.append_text("line 4 aaaa bbbb", data_colors().text)
+    QTest.mouseMove(output.viewport(), start + QPoint(40, 0))
+
+    cursor = output.textCursor()
+    assert cursor.anchor() == press_position
+    assert "\n" not in cursor.selectedText()
+
+    QTest.mouseRelease(
+        output.viewport(),
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+        start + QPoint(40, 0),
+    )
 
 
 def test_window_minimum_size_matches_layout_target(qtbot: object) -> None:
