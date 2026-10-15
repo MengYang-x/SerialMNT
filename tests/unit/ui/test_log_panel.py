@@ -51,10 +51,11 @@ def test_log_panel_directory_row_layout(qtbot: object) -> None:
 
         # 面板必须能塞进侧栏最小宽度，否则路径和按钮会被右侧裁掉。
         assert panel.minimumSizeHint().width() <= 260
-        # 路径独占一行并铺满内容宽度；“选择目录/打开目录”等宽，“导出”独占整行。
+        # “自动保存”与格式同排；目录行右侧的“…”按钮贴住内容右边缘；导出比打开目录宽。
         content_right = panel.export_button.geometry().right()
-        assert panel.directory_edit.geometry().right() == content_right
-        assert panel.browse_button.width() == panel.open_button.width()
-        assert panel.export_button.width() > panel.browse_button.width()
+        assert panel.browse_button.geometry().right() == content_right
+        check_center = panel.enabled_check.geometry().center().y()
+        assert check_center == panel.format_combo.geometry().center().y()  # type: ignore[attr-defined]
+        assert panel.export_button.width() > panel.open_button.width()
     finally:
         controller.close(force=True)

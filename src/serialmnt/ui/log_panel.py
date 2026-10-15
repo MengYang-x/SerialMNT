@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSizePolicy,
+    QToolButton,
     QWidget,
 )
 
@@ -52,7 +53,10 @@ class LogPanel(QGroupBox):
         self.format_combo.addItem("CSV", "csv")
         self.format_combo.addItem("TXT", "txt")
         self.directory_edit = QLineEdit()
-        self.browse_button = QPushButton("选择目录")
+        self.browse_button = QToolButton()
+        self.browse_button.setText("…")
+        self.browse_button.setToolTip("选择日志目录")
+        self.browse_button.setFixedSize(26, 26)
         self.open_button = QPushButton("打开目录")
         self.export_button = QPushButton("导出当前缓冲")
         self.status_label = QLabel()
@@ -61,23 +65,24 @@ class LogPanel(QGroupBox):
         self._status_text = ""
 
         layout = QGridLayout(self)
+        # 勾选和格式同排两端对齐；选目录收进目录行的“…”按钮，不再单独占一行。
         layout.addWidget(self.enabled_check, 0, 0)
-        layout.addWidget(QLabel("格式"), 0, 1)
-        layout.addWidget(self.format_combo, 0, 2)
+        layout.addWidget(self.format_combo, 0, 1, Qt.AlignmentFlag.AlignRight)
         layout.addWidget(QLabel("目录"), 1, 0)
-        # 路径独占一行避免被按钮挤到截断；选择/打开等分一行，导出作为主操作独占一行。
-        layout.addWidget(self.directory_edit, 1, 1, 1, 2)
-        button_row = QHBoxLayout()
-        button_row.setSpacing(6)
-        buttons = (self.browse_button, self.open_button)
-        width = max(button.sizeHint().width() for button in buttons)
-        for button in buttons:
+        directory_row = QHBoxLayout()
+        directory_row.setSpacing(4)
+        directory_row.addWidget(self.directory_edit, 1)
+        directory_row.addWidget(self.browse_button)
+        layout.addLayout(directory_row, 1, 1)
+        # 打开目录与导出同排，导出占比更宽以体现主操作。
+        action_row = QHBoxLayout()
+        action_row.setSpacing(6)
+        for button, stretch in ((self.open_button, 3), (self.export_button, 4)):
             button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-            button.setMinimumWidth(width)
-            button_row.addWidget(button, 1)
-        layout.addLayout(button_row, 2, 0, 1, 3)
-        layout.addWidget(self.export_button, 3, 0, 1, 3)
-        layout.addWidget(self.status_label, 4, 0, 1, 3)
+            action_row.addWidget(button, stretch)
+        layout.addLayout(action_row, 2, 0, 1, 2)
+        layout.addWidget(self.status_label, 3, 0, 1, 2)
+        layout.setColumnStretch(1, 1)
 
     def _connect_changes(self) -> None:
         self.enabled_check.toggled.connect(self._settings_changed)
