@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 
-from PySide6.QtCore import QSignalBlocker, Qt, QTimer, Signal
+from PySide6.QtCore import QSignalBlocker, QSize, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -121,7 +121,9 @@ class ConnectionPanel(QGroupBox):
             self.style().standardIcon(QStyle.StandardPixmap.SP_BrowserReload)
         )
         self.refresh_button.setToolTip("刷新端口列表")
-        self.refresh_button.setFixedSize(24, 24)
+        # QToolButton 默认图标尺寸取样式表的 16px，显式放大才看得清。
+        self.refresh_button.setIconSize(QSize(22, 22))
+        self.refresh_button.setFixedSize(26, 26)
         self.refresh_button.clicked.connect(self._refresh_ports)
         self.baud_combo = QComboBox()
         self.baud_combo.setEditable(True)
