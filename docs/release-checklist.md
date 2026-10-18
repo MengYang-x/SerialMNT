@@ -1,11 +1,18 @@
 # SerialMNT 发布检查清单
 
+## 0.6.0 发布记录
+
+- 发布对象：`v0.6.0`，合并发布 0.3.1、0.4.0、0.5.0 和 0.6.0 的变更。
+- 已执行：`scripts/build.ps1` 的文档同步、版本同步、Ruff、612 项 pytest 和 PyInstaller 构建全部通过。
+- 已执行：`SerialMNT.exe` 构建成功（48123376 字节），并完成本机离屏冷启动 10 秒冒烟。
+- 未执行：Linux 构建、桌面环境与干净测试机验收、真实串口和两小时稳定性测试。
+
 ## 代码和文档
 
-- [ ] 版本号与 `docs/release-notes-<version>.md` 一致，且 `scripts/check_version_sync.py` 通过。
+- [x] 版本号与 `docs/release-notes-<version>.md` 一致，且 `scripts/check_version_sync.py` 通过。
 - [x] `README.md`、`LICENSE`、`THIRD_PARTY_NOTICES.md` 完整。
 - [x] `docs/user-guide.md`、`docs/developer-guide.md` 和 `docs/README.md` 完整。
-- [ ] `AGENT.md`、实施计划和架构决策记录已同步，提交信息与文档使用简体中文。
+- [x] `AGENT.md`、实施计划和架构决策记录已同步，提交信息与文档使用简体中文。
 - [ ] 本地 Hook 已启用，文档同步和版本同步检查通过。
 - [ ] 提交信息中文检查（本地 `commit-msg` 钩子或 CI）通过。
 - [ ] GitHub Actions 文档同步、版本同步、Ruff 和 pytest 门禁通过。
@@ -16,7 +23,7 @@
 - [x] `ruff format --check .` 通过。
 - [x] `ruff check .` 通过。
 - [x] `pytest` 通过。
-- [ ] 更新检查相关单元和 UI 测试通过，测试使用 Fake 源且不访问真实网络。
+- [x] 更新检查相关单元和 UI 测试通过，测试使用 Fake 源且不访问真实网络。
 - [x] domain 分支覆盖率不低于 90%。
 - [x] application 分支覆盖率不低于 90%。
 - [x] 标准 wheel 和 sdist 构建成功。

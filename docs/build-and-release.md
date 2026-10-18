@@ -100,9 +100,9 @@ Windows 单文件目标机器无需安装 Python。Linux 单文件仍依赖常�
 
 ## 当前 Windows 构建记录
 
-2026-10-04 已成功生成（当时产物名为改名前的 `QSerialTool.exe`，下列体积与哈希对应那个二进制；工程改名为 SerialMNT 后需重新构建并刷新本节）：
+2026-10-18 已使用 `scripts/build.ps1` 成功生成 SerialMNT 0.6.0：
 
-- 文件：`QSerialTool.exe`
-- 大小：44386828 字节
-- SHA-256：`f68785b39e5fbbbab832fb6fb3cf77eacf152d2281cdbaacd308543c1f1b91ed`
-- 当前执行环境受 Application Control 策略限制，无法直接启动该外部可执行文件；需要在允许执行本地构建产物的测试机上完成启动验收。
+- 文件：`SerialMNT.exe`
+- 大小：48123376 字节
+- SHA-256：`2992d85d383d3ced520465b494ef1bf2267e7636cb10a15e08b018b743e52e78`
+- 已在本机以 `QT_QPA_PLATFORM=offscreen` 冷启动 10 秒，进程未退出；桌面窗口、任务栏图标、配置恢复和真实串口仍需在目标测试机验收。
