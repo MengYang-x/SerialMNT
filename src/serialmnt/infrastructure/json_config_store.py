@@ -157,8 +157,6 @@ class JsonConfigStore:
             config=SerialConfig(**config_payload),
             display_mode=payload.get("display_mode", "text"),
             show_timestamp=payload.get("show_timestamp", True),
-            show_rx=payload.get("show_rx", True),
-            show_tx=payload.get("show_tx", True),
             autoscroll=payload.get("autoscroll", True),
             auto_log_enabled=payload.get("auto_log_enabled", False),
             auto_log_format=payload.get("auto_log_format", "csv"),
@@ -170,4 +168,5 @@ class JsonConfigStore:
             view_mode=payload.get("view_mode", "split"),
             highlight_enabled=payload.get("highlight_enabled", True),
             wrap_enabled=payload.get("wrap_enabled", True),
+            show_line_number=payload.get("show_line_number", True),
         )

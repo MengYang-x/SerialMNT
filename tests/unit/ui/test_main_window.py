@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QScrollArea,
     QToolBar,
+    QToolButton,
 )
 from tests.fixtures.fakes import FakeClock, FakeTransport
 
@@ -351,8 +352,7 @@ def test_session_tab_toggles_terminal_view_and_persists_per_tab(qtbot: object) -
         for widget in (
             tab.receive_panel.mode_combo,
             tab.receive_panel.timestamp_check,
-            tab.receive_panel.rx_check,
-            tab.receive_panel.tx_check,
+            tab.receive_panel.line_number_check,
         )
     )
     assert splitter.handleWidth() == 0
@@ -380,8 +380,7 @@ def test_session_tab_toggles_terminal_view_and_persists_per_tab(qtbot: object) -
         for widget in (
             tab.receive_panel.mode_combo,
             tab.receive_panel.timestamp_check,
-            tab.receive_panel.rx_check,
-            tab.receive_panel.tx_check,
+            tab.receive_panel.line_number_check,
         )
     )
     assert splitter.handleWidth() == 6
@@ -426,8 +425,6 @@ def test_session_tab_restores_terminal_view_and_saved_split_state(
         config=SerialConfig(port=""),
         display_mode="text",
         show_timestamp=True,
-        show_rx=True,
-        show_tx=True,
         autoscroll=True,
         view_mode="terminal",
     )
@@ -1246,8 +1243,6 @@ def test_main_window_centers_on_primary_screen_at_startup(qtbot: object) -> None
         config=SerialConfig(port=""),
         display_mode="text",
         show_timestamp=True,
-        show_rx=True,
-        show_tx=True,
         autoscroll=True,
     )
     config = AppConfig(
@@ -1354,8 +1349,6 @@ def test_wrap_enabled_restored_from_config(qtbot: object) -> None:
         config=SerialConfig(port="COM1"),
         display_mode="text",
         show_timestamp=True,
-        show_rx=True,
-        show_tx=True,
         autoscroll=True,
         wrap_enabled=False,
     )
@@ -1383,6 +1376,22 @@ def test_wrap_enabled_restored_from_config(qtbot: object) -> None:
         window.close()
 
 
+def test_line_number_toggle_persists_in_preferences(qtbot: object) -> None:
+    transport = FakeTransport()
+    window = _window(qtbot, transport)
+    tab = _current_tab(window)
+
+    try:
+        panel = tab.receive_panel
+        assert panel.line_number_check.isChecked() is True
+        assert tab.to_preferences().show_line_number is True
+
+        panel.line_number_check.setChecked(False)
+        assert tab.to_preferences().show_line_number is False
+    finally:
+        window.close()
+
+
 def test_line_state_never_restored_from_config(qtbot: object) -> None:
     transport = FakeTransport()
     manager = SessionManager(transport_factory=lambda: transport, clock=FakeClock())
@@ -1391,8 +1400,6 @@ def test_line_state_never_restored_from_config(qtbot: object) -> None:
         config=SerialConfig(port="COM1", dtr=True, rts=True),
         display_mode="text",
         show_timestamp=True,
-        show_rx=True,
-        show_tx=True,
         autoscroll=True,
     )
     config = AppConfig(
@@ -1612,11 +1619,15 @@ def test_send_panel_and_content_fit_narrow_window(qtbot: object) -> None:
 
     window.resize(900, 600)
     receive_panel = tab.receive_panel
-    qtbot.waitUntil(lambda: bool(receive_panel._header_overflow.folded_widgets()), timeout=2000)
-    for widget in (receive_panel.pause_button, receive_panel.clear_button, tab.view_toggle_button):
+    qtbot.waitUntil(lambda: receive_panel.width() < 700, timeout=2000)
+    for widget in (
+        receive_panel.pause_button,
+        receive_panel.clear_button,
+        receive_panel.autoscroll_check,
+        tab.view_toggle_button,
+    ):
         assert widget.isVisibleTo(tab)
         assert widget.geometry().right() <= receive_panel.width()
-    assert receive_panel._header_overflow.button.geometry().right() <= receive_panel.width()
     window.close()
 
 
@@ -2004,6 +2015,8 @@ def test_receive_panel_layers_timestamp_direction_and_payload_colors(qtbot: obje
     )
     panel = ReceivePanel(records_provider=lambda: records, clear_callback=lambda: 0)
     qtbot.addWidget(panel)
+    # 行号有独立测试；这里关闭行号，只核对颜色分层。
+    panel.line_number_check.setChecked(False)
     panel.output.clear_content()
     panel.render_records()
 
@@ -2030,6 +2043,7 @@ def test_receive_panel_hex_mode_keeps_payload_colors_without_timestamp(qtbot: ob
     qtbot.addWidget(panel)
     panel.mode_combo.setCurrentIndex(1)
     panel.timestamp_check.setChecked(False)
+    panel.line_number_check.setChecked(False)
     panel.output.clear_content()
     panel.render_records()
 
@@ -2254,8 +2268,6 @@ def test_encoding_selection_persists_and_restores(qtbot: object) -> None:
         config=SerialConfig(port="", encoding="gb18030"),
         display_mode="text",
         show_timestamp=True,
-        show_rx=True,
-        show_tx=True,
         autoscroll=True,
     )
     config = AppConfig(
@@ -2329,98 +2341,75 @@ def test_receive_header_shows_all_controls_when_width_allows(qtbot: object) -> N
     window = _window(qtbot, transport)
     tab = _current_tab(window)
     receive_panel = tab.receive_panel
-    overflow = receive_panel._header_overflow
 
     try:
         window.resize(1180, 760)
-        qtbot.waitUntil(lambda: not overflow.folded_widgets(), timeout=2000)
+        qtbot.waitUntil(lambda: receive_panel.width() > 700, timeout=2000)
 
-        assert not overflow.button.isVisibleTo(receive_panel)
         for widget in (
             receive_panel.mode_combo,
             receive_panel.timestamp_check,
-            receive_panel.rx_check,
-            receive_panel.tx_check,
+            receive_panel.line_number_check,
+            receive_panel.autoscroll_check,
+            receive_panel.wrap_check,
             receive_panel.pause_button,
             receive_panel.clear_button,
-            receive_panel.wrap_check,
-            receive_panel.autoscroll_check,
             tab.view_toggle_button,
         ):
             assert widget.isVisibleTo(tab)
+            assert widget.width() >= widget.sizeHint().width()
+        assert not receive_panel.highlight_check.isVisibleTo(tab)
+    finally:
+        window.close()
+
+
+def test_receive_header_keeps_all_controls_visible_when_narrow(qtbot: object) -> None:
+    transport = FakeTransport()
+    window = _window(qtbot, transport)
+    tab = _current_tab(window)
+    receive_panel = tab.receive_panel
+
+    try:
+        window.resize(900, 600)
+        qtbot.waitUntil(lambda: receive_panel.width() < 700, timeout=2000)
+
+        for widget in (
+            receive_panel.mode_combo,
+            receive_panel.timestamp_check,
+            receive_panel.line_number_check,
+            receive_panel.autoscroll_check,
+            receive_panel.wrap_check,
+            receive_panel.pause_button,
+            receive_panel.clear_button,
+            tab.view_toggle_button,
+        ):
+            assert widget.isVisibleTo(tab)
+            assert widget.geometry().right() <= receive_panel.width()
             assert widget.width() >= widget.sizeHint().width()
     finally:
         window.close()
 
 
-def test_receive_header_folds_secondary_controls_when_narrow(qtbot: object) -> None:
+def test_receive_header_autoscroll_is_standalone_checkbox(qtbot: object) -> None:
     transport = FakeTransport()
     window = _window(qtbot, transport)
     tab = _current_tab(window)
     receive_panel = tab.receive_panel
-    overflow = receive_panel._header_overflow
 
     try:
-        window.resize(900, 600)
-        qtbot.waitUntil(lambda: bool(overflow.folded_widgets()), timeout=2000)
-
-        folded = overflow.folded_widgets()
-        assert receive_panel.autoscroll_check in folded
-        assert receive_panel.wrap_check in folded
-        assert receive_panel.pause_button not in folded
-        assert receive_panel.clear_button not in folded
-        assert receive_panel.mode_combo not in folded
-        assert tab.view_toggle_button not in folded
-
-        assert overflow.button.isVisibleTo(receive_panel)
-        for widget in (
-            receive_panel.mode_combo,
-            receive_panel.pause_button,
-            receive_panel.clear_button,
-            tab.view_toggle_button,
-            overflow.button,
-        ):
-            assert widget.isVisibleTo(tab)
-            assert widget.geometry().right() <= receive_panel.width()
-
-        visible_actions = [
-            action.text() for action in overflow.menu.actions() if action.isVisible()
-        ]
-        assert sorted(visible_actions) == sorted(widget.text() for widget in folded)
-    finally:
-        window.close()
-
-
-def test_receive_header_overflow_action_mirrors_checkbox_state(qtbot: object) -> None:
-    transport = FakeTransport()
-    window = _window(qtbot, transport)
-    tab = _current_tab(window)
-    receive_panel = tab.receive_panel
-    overflow = receive_panel._header_overflow
-
-    try:
-        window.resize(900, 600)
-        qtbot.waitUntil(
-            lambda: receive_panel.autoscroll_check in overflow.folded_widgets(), timeout=2000
-        )
-        action = next(item for item in overflow.menu.actions() if item.text() == "自动滚动")
-        assert action.isVisible()
-
-        action.setChecked(False)
-        assert not receive_panel.autoscroll_check.isChecked()
-        receive_panel.autoscroll_check.setChecked(True)
-        assert action.isChecked()
-
-        window.resize(1180, 760)
-        qtbot.waitUntil(lambda: not overflow.folded_widgets(), timeout=2000)
+        assert receive_panel.autoscroll_check.text() == "自动滚动"
+        assert receive_panel.autoscroll_check.isVisibleTo(tab)
         assert receive_panel.autoscroll_check.isChecked()
+        assert tab.to_preferences().autoscroll is True
 
         window.resize(900, 600)
-        qtbot.waitUntil(
-            lambda: receive_panel.autoscroll_check in overflow.folded_widgets(), timeout=2000
-        )
-        texts = [item.text() for item in overflow.menu.actions()]
-        assert len(texts) == len(set(texts))
+        qtbot.waitUntil(lambda: receive_panel.width() < 700, timeout=2000)
+        assert receive_panel.autoscroll_check.isVisibleTo(tab)
+        assert receive_panel.autoscroll_check.geometry().right() <= receive_panel.width()
+
+        receive_panel.autoscroll_check.setChecked(False)
+        assert tab.to_preferences().autoscroll is False
+        assert not any(button.text() == "⋯" for button in receive_panel.findChildren(QToolButton))
     finally:
         window.close()
 

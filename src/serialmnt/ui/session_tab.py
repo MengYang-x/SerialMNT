@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMenu,
     QMessageBox,
+    QPushButton,
     QScrollArea,
     QSizePolicy,
     QSplitter,
@@ -130,10 +131,8 @@ class SessionTab(QWidget):
         self.log_panel = LogPanel(controller=self.controller)
 
     def _build_sidebar_toggle(self) -> None:
-        self.sidebar_toggle_button = QToolButton()
-        self.sidebar_toggle_button.setText("收起设置")
+        self.sidebar_toggle_button = QPushButton("收起设置")
         self.sidebar_toggle_button.setCheckable(True)
-        self.sidebar_toggle_button.setAutoRaise(True)
         self.sidebar_toggle_button.setToolTip("显示或隐藏左侧设置面板")
         self.sidebar_toggle_button.clicked.connect(self._toggle_sidebar)
         self.receive_panel.add_leading_header_widget(self.sidebar_toggle_button)
@@ -204,10 +203,8 @@ class SessionTab(QWidget):
             )
 
     def _build_view_toggle(self) -> None:
-        self.view_toggle_button = QToolButton()
-        self.view_toggle_button.setText("终端")
+        self.view_toggle_button = QPushButton("终端")
         self.view_toggle_button.setCheckable(True)
-        self.view_toggle_button.setAutoRaise(True)
         self.view_toggle_button.setToolTip("勾选切换为终端视图：日志与输入同屏")
         self.view_toggle_button.toggled.connect(self._view_toggled)
         self.receive_panel.add_trailing_header_widget(self.view_toggle_button)
@@ -448,11 +445,10 @@ class SessionTab(QWidget):
             config=config,
             display_mode=self.receive_panel.display_mode,
             show_timestamp=self.receive_panel.timestamp_check.isChecked(),
-            show_rx=self.receive_panel.rx_check.isChecked(),
-            show_tx=self.receive_panel.tx_check.isChecked(),
             autoscroll=self.receive_panel.autoscroll_check.isChecked(),
             highlight_enabled=self.receive_panel.highlight_check.isChecked(),
             wrap_enabled=self.receive_panel.wrap_check.isChecked(),
+            show_line_number=self.receive_panel.line_number_check.isChecked(),
             auto_log_enabled=self.controller.auto_log_enabled,
             auto_log_format=self.controller.auto_log_format,
             auto_log_directory=self.controller.auto_log_directory,

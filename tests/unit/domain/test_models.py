@@ -43,8 +43,6 @@ def _preferences(**overrides: object) -> SessionPreferences:
         "config": SerialConfig(port="COM1"),
         "display_mode": "text",
         "show_timestamp": True,
-        "show_rx": True,
-        "show_tx": True,
         "autoscroll": True,
         "auto_log_enabled": False,
         "auto_log_format": "csv",
@@ -276,6 +274,15 @@ def test_session_preferences_defaults_wrap_enabled() -> None:
     for value in (1, 0, "yes", None):
         with pytest.raises(ValidationError):
             _preferences(wrap_enabled=value)
+
+
+def test_session_preferences_defaults_show_line_number() -> None:
+    assert _preferences().show_line_number is True
+    assert _preferences(show_line_number=False).show_line_number is False
+
+    for value in (1, 0, "yes", None):
+        with pytest.raises(ValidationError):
+            _preferences(show_line_number=value)
 
 
 def test_app_config_validates_active_session_index() -> None:

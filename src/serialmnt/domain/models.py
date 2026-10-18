@@ -228,8 +228,6 @@ class SessionPreferences:
     config: SerialConfig
     display_mode: DisplayMode
     show_timestamp: bool
-    show_rx: bool
-    show_tx: bool
     autoscroll: bool
     auto_log_enabled: bool = False
     auto_log_format: LogFormat = "csv"
@@ -241,6 +239,7 @@ class SessionPreferences:
     view_mode: ViewMode = "split"
     highlight_enabled: bool = True
     wrap_enabled: bool = True
+    show_line_number: bool = True
 
     def __post_init__(self) -> None:
         _require_string(self.title, "标签标题")
@@ -250,8 +249,6 @@ class SessionPreferences:
             raise ValidationError("显示模式必须是 text 或 hex。")
         for value, field_name in (
             (self.show_timestamp, "show_timestamp"),
-            (self.show_rx, "show_rx"),
-            (self.show_tx, "show_tx"),
             (self.autoscroll, "autoscroll"),
             (self.auto_log_enabled, "auto_log_enabled"),
         ):
@@ -278,6 +275,7 @@ class SessionPreferences:
             raise ValidationError("视图模式必须是 split 或 terminal。")
         _require_bool(self.highlight_enabled, "highlight_enabled")
         _require_bool(self.wrap_enabled, "wrap_enabled")
+        _require_bool(self.show_line_number, "show_line_number")
 
 
 @dataclass(frozen=True, slots=True)

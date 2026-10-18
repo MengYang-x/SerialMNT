@@ -101,3 +101,50 @@ def test_ctrl_f_searches_terminal_view(qtbot: object) -> None:
     assert panel.find_bar.isVisible()
     qtbot.keyClicks(panel.find_bar.query_edit, "timeout")
     assert panel.output.textCursor().selectedText() == "timeout"
+
+
+def test_line_numbers_are_shown_by_default_and_toggle_per_display_line(qtbot: object) -> None:
+    timestamp = datetime(2026, 10, 18, tzinfo=timezone.utc)
+    records = (
+        LogRecord.from_bytes(
+            timestamp_utc=timestamp,
+            direction="rx",
+            raw=b"first\r\nsecond\r\n",
+            encoding="utf-8",
+            session_id="line-number",
+        ),
+        LogRecord.from_bytes(
+            timestamp_utc=timestamp,
+            direction="tx",
+            raw=b"reply",
+            encoding="utf-8",
+            session_id="line-number",
+        ),
+    )
+    panel = ReceivePanel(records_provider=lambda: records, clear_callback=lambda: 0)
+    qtbot.addWidget(panel)
+    panel.timestamp_check.setChecked(False)
+
+    assert panel.line_number_check.isChecked()
+    assert panel.output.toPlainText().splitlines() == [
+        "     1 │ RX: first",
+        "     2 │ second",
+        "",
+        "     3 │ TX: reply",
+    ]
+
+    panel.line_number_check.setChecked(False)
+    assert panel.output.toPlainText().splitlines() == ["RX: first", "second", "", "TX: reply"]
+
+    panel.line_number_check.setChecked(True)
+    assert panel.output.toPlainText().startswith("     1 │ RX: first")
+
+
+def test_line_numbers_hidden_in_terminal_view(qtbot: object) -> None:
+    panel = ReceivePanel(records_provider=_records, clear_callback=lambda: 0)
+    qtbot.addWidget(panel)
+    panel.show()
+    panel.set_terminal_mode(True)
+
+    assert not panel.line_number_check.isVisibleTo(panel)
+    assert "│" not in panel.output.toPlainText()

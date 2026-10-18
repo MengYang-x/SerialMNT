@@ -37,8 +37,6 @@ def _app_config() -> AppConfig:
         config=SerialConfig(port="COM1", baudrate=9600),
         display_mode="hex",
         show_timestamp=False,
-        show_rx=False,
-        show_tx=True,
         autoscroll=False,
         auto_log_enabled=True,
         auto_log_format="txt",
@@ -49,6 +47,7 @@ def _app_config() -> AppConfig:
         periodic_interval_ms=250,
         view_mode="terminal",
         wrap_enabled=False,
+        show_line_number=False,
     )
     return AppConfig(
         schema_version=1,
@@ -184,6 +183,19 @@ def test_json_config_defaults_wrap_enabled_for_legacy_files(tmp_path: Path) -> N
 
     assert loaded is not None
     assert loaded.sessions[0].wrap_enabled is True
+
+
+def test_json_config_defaults_show_line_number_for_legacy_files(tmp_path: Path) -> None:
+    path = tmp_path / "settings.json"
+    payload = asdict(_app_config())
+    del payload["sessions"][0]["show_line_number"]
+    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    store = JsonConfigStore(path)
+
+    loaded = store.load()
+
+    assert loaded is not None
+    assert loaded.sessions[0].show_line_number is True
 
 
 def test_csv_log_sink_writes_expected_fields(tmp_path: Path) -> None:

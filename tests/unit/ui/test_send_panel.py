@@ -36,8 +36,6 @@ def test_send_panel_remembers_history_and_sends_periodically(qtbot: object) -> N
         config=controller.config,
         display_mode="text",
         show_timestamp=True,
-        show_rx=True,
-        show_tx=True,
         autoscroll=True,
         send_history=("old",),
     )
