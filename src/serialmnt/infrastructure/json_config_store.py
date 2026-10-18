@@ -11,8 +11,11 @@ from typing import Any
 
 from serialmnt.domain import (
     DEFAULT_LINE_ENDING,
+    DEFAULT_LOG_LEVEL_COLOR,
+    DEFAULT_LOG_LEVEL_RULES,
     AppConfig,
     ConfigIOError,
+    LogLevelRule,
     SerialConfig,
     SessionPreferences,
     ValidationError,
@@ -114,7 +117,30 @@ class JsonConfigStore:
             sidebar_width=payload.get("sidebar_width", 320),
             data_font_size=payload.get("data_font_size", 0),
             content_splitter_state=payload.get("content_splitter_state"),
+            log_level_rules=JsonConfigStore._decode_log_level_rules(payload),
         )
+
+    @staticmethod
+    def _decode_log_level_rules(payload: dict[str, Any]) -> tuple[LogLevelRule, ...]:
+        """读取日志级别规则；旧配置缺省时使用内置规则，单条非法规则跳过。"""
+        raw_rules = payload.get("log_level_rules")
+        if raw_rules is None:
+            return DEFAULT_LOG_LEVEL_RULES
+        if not isinstance(raw_rules, list):
+            raise TypeError("log_level_rules 必须是数组。")
+        rules: list[LogLevelRule] = []
+        for raw_rule in raw_rules:
+            if not isinstance(raw_rule, dict):
+                continue
+            field = raw_rule.get("field")
+            color = raw_rule.get("color", DEFAULT_LOG_LEVEL_COLOR)
+            if not isinstance(field, str) or not isinstance(color, str):
+                continue
+            try:
+                rules.append(LogLevelRule(field=field, color=color))
+            except ValidationError:
+                continue
+        return tuple(rules)
 
     @staticmethod
     def _decode_session(payload: Any) -> SessionPreferences:

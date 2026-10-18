@@ -22,6 +22,7 @@ from serialmnt.application import SessionController
 from serialmnt.domain import (
     ACTIVE_FILE_TRANSFER_STATES,
     DomainError,
+    LogLevelRule,
     LogRecord,
     PortInfo,
     SessionPreferences,
@@ -62,18 +63,20 @@ class SessionTab(QWidget):
     title_changed = Signal(str)
     font_zoom_requested = Signal(int)
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 - 依赖、偏好和全局规则均为显式注入
         self,
         *,
         controller: SessionController,
         bridge: QtSessionBridge,
         port_provider: Callable[[], tuple[PortInfo, ...]],
         preferences: SessionPreferences | None = None,
+        log_level_rules: tuple[LogLevelRule, ...] | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.controller = controller
         self._bridge = bridge
+        self._log_level_rules = log_level_rules
         self._snapshot: SessionSnapshot | None = None
         self._title = ""
         self._last_error_key: tuple[object, str | None] | None = None
@@ -120,6 +123,7 @@ class SessionTab(QWidget):
             records_provider=lambda: self.controller.records,
             clear_callback=self.controller.clear_buffer,
             preferences=preferences,
+            log_level_rules=self._log_level_rules,
         )
         self.send_panel = SendPanel(controller=self.controller, preferences=preferences)
         self.file_transfer_panel = FileTransferPanel(controller=self.controller)
@@ -328,6 +332,11 @@ class SessionTab(QWidget):
         """按全局字号同步接收区与发送编辑框字体。"""
         self.receive_panel.set_data_font_size(size)
         self.send_panel.set_data_font_size(size)
+
+    def set_log_level_rules(self, rules: tuple[LogLevelRule, ...]) -> None:
+        """应用全局日志级别规则并重绘接收区。"""
+        self._log_level_rules = rules
+        self.receive_panel.set_log_level_rules(rules)
 
     def refresh_theme(self) -> None:
         """主题切换后刷新接收区配色和状态点颜色。"""

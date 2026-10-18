@@ -40,10 +40,12 @@ from serialmnt.application import (
     UpdateStatus,
 )
 from serialmnt.domain import (
+    DEFAULT_LOG_LEVEL_RULES,
     AppConfig,
     ConfigIOError,
     ConfigStore,
     DomainError,
+    LogLevelRule,
     PortInfo,
     SerialConfig,
     SessionPreferences,
@@ -52,6 +54,7 @@ from serialmnt.domain import (
 )
 from serialmnt.ui.app_icon import app_icon
 from serialmnt.ui.help_window import HelpWindow
+from serialmnt.ui.log_level_settings import LogLevelRulesDialog
 from serialmnt.ui.no_wheel_combo import NoWheelComboBox
 from serialmnt.ui.qt_bridge import QtSessionBridge
 from serialmnt.ui.session_tab import _SIDEBAR_DEFAULT_WIDTH, SessionTab
@@ -132,6 +135,11 @@ class MainWindow(QMainWindow):
         self._update_runner: UpdateCheckRunner | None = None
         self._theme: Theme = initial_config.theme if initial_config is not None else "system"
         self._data_font_size = initial_config.data_font_size if initial_config is not None else 0
+        self._log_level_rules = (
+            initial_config.log_level_rules
+            if initial_config is not None
+            else DEFAULT_LOG_LEVEL_RULES
+        )
         self._sidebar_visible = initial_config.sidebar_visible if initial_config else True
         self._sidebar_width = (
             initial_config.sidebar_width if initial_config else _SIDEBAR_DEFAULT_WIDTH
@@ -189,10 +197,14 @@ class MainWindow(QMainWindow):
         self.check_update_action.setEnabled(False)
         self.check_update_action.triggered.connect(self._manual_check_updates)
 
+        self.log_level_action = QAction("日志级别颜色…", self)
+        self.log_level_action.triggered.connect(self._open_log_level_settings)
+
         self.main_menu = QMenu(self)
         self.main_menu.addAction(new_action)
         self.main_menu.addAction(close_action)
         self.main_menu.addMenu(self.font_menu)
+        self.main_menu.addAction(self.log_level_action)
         self.main_menu.addSeparator()
         self.main_menu.addAction(self.help_action)
         self.main_menu.addAction(self.check_update_action)
@@ -286,6 +298,20 @@ class MainWindow(QMainWindow):
         self._help_window.show()
         self._help_window.raise_()
         self._help_window.activateWindow()
+
+    def _open_log_level_settings(self) -> None:
+        """打开全局日志级别颜色设置，确认后立即应用到所有会话。"""
+        dialog = LogLevelRulesDialog(self._log_level_rules, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self._apply_log_level_rules(dialog.rules())
+
+    def _apply_log_level_rules(self, rules: tuple[LogLevelRule, ...]) -> None:
+        self._log_level_rules = tuple(rules)
+        for index in range(self.tabs.count()):
+            widget = self.tabs.widget(index)
+            if isinstance(widget, SessionTab):
+                widget.set_log_level_rules(self._log_level_rules)
+        self._schedule_save()
 
     def configure_update_service(self, service: UpdateService | None) -> None:
         """由组合根注入更新服务并启动一次启动检查。
@@ -437,6 +463,7 @@ class MainWindow(QMainWindow):
             bridge=bridge,
             port_provider=self._port_provider,
             preferences=preferences,
+            log_level_rules=self._log_level_rules,
         )
         current_tab = self.tabs.currentWidget()
         if isinstance(current_tab, SessionTab):
@@ -629,6 +656,7 @@ class MainWindow(QMainWindow):
             sidebar_width=self._sidebar_width,
             content_splitter_state=self._content_splitter_state,
             data_font_size=self._data_font_size,
+            log_level_rules=self._log_level_rules,
         )
         if config == self._last_saved:
             return

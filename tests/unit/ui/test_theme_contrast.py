@@ -10,7 +10,12 @@ from PySide6.QtWidgets import QApplication
 
 from serialmnt.ui import apply_theme, data_colors, resolved_theme
 from serialmnt.ui.style_sheet import assets_dir, build_stylesheet, tokens
-from serialmnt.ui.theme_manager import ansi_color, highlight_colors, status_colors
+from serialmnt.ui.theme_manager import (
+    ansi_color,
+    highlight_colors,
+    log_level_color,
+    status_colors,
+)
 
 _DATA_COLOR_FIELDS = ("text", "rx", "tx", "system")
 _STATUS_FIELDS = ("connected", "error", "standby")
@@ -127,6 +132,15 @@ def test_highlight_colors_meet_contrast_targets(app: QApplication, theme_name: s
     for field in ("address", "link", "success", "error", "warning"):
         value = getattr(colors, field)
         assert _contrast(value, background) >= 4.5, f"{theme_name} {field}={value}"
+
+
+@pytest.mark.parametrize("theme_name", ["light", "dark"])
+def test_log_level_colors_meet_contrast_targets(app: QApplication, theme_name: str) -> None:
+    apply_theme(app, theme_name)
+    background = _base_color(app)
+    for key in ("default", "warning", "error", "pass", "debug"):
+        value = log_level_color(key)
+        assert _contrast(value, background) >= 4.5, f"{theme_name} {key}={value}"
 
 
 def _data_area_font_declarations(stylesheet: str) -> list[str]:

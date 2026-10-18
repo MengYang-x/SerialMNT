@@ -10,8 +10,10 @@ import pytest
 
 from serialmnt.domain import (
     DEFAULT_LINE_ENDING,
+    DEFAULT_LOG_LEVEL_RULES,
     AppConfig,
     LogIOError,
+    LogLevelRule,
     LogRecord,
     SerialConfig,
     SessionPreferences,
@@ -59,6 +61,7 @@ def _app_config() -> AppConfig:
         sidebar_width=360,
         content_splitter_state="splitter-state",
         data_font_size=16,
+        log_level_rules=(LogLevelRule(field="Trace", color="#123456"),),
     )
 
 
@@ -139,6 +142,35 @@ def test_json_config_defaults_data_font_size_for_legacy_files(tmp_path: Path) ->
 
     assert loaded is not None
     assert loaded.data_font_size == 0
+
+
+def test_json_config_defaults_log_level_rules_for_legacy_files(tmp_path: Path) -> None:
+    path = tmp_path / "settings.json"
+    payload = asdict(_app_config())
+    del payload["log_level_rules"]
+    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    store = JsonConfigStore(path)
+
+    loaded = store.load()
+
+    assert loaded is not None
+    assert loaded.log_level_rules == DEFAULT_LOG_LEVEL_RULES
+
+
+def test_json_config_skips_invalid_log_level_rules(tmp_path: Path) -> None:
+    path = tmp_path / "settings.json"
+    payload = asdict(_app_config())
+    payload["log_level_rules"] = [
+        {"field": "", "color": "error"},
+        {"field": "Trace", "color": "#123456"},
+    ]
+    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    store = JsonConfigStore(path)
+
+    loaded = store.load()
+
+    assert loaded is not None
+    assert loaded.log_level_rules == (LogLevelRule(field="Trace", color="#123456"),)
 
 
 def test_json_config_defaults_wrap_enabled_for_legacy_files(tmp_path: Path) -> None:

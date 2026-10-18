@@ -1,6 +1,6 @@
 """接收数据显示和显示过滤面板。"""
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from PySide6.QtCore import QObject, QSignalBlocker, Qt, Signal
@@ -18,11 +18,19 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from serialmnt.domain import DisplayMode, LogRecord, SessionPreferences, TerminalScreen
+from serialmnt.domain import (
+    DEFAULT_LOG_LEVEL_RULES,
+    DisplayMode,
+    LogLevelRule,
+    LogRecord,
+    SessionPreferences,
+    TerminalScreen,
+    match_log_level,
+)
 from serialmnt.ui.find_bar import FindBar
 from serialmnt.ui.no_wheel_combo import NoWheelComboBox
 from serialmnt.ui.terminal_output import TerminalOutput
-from serialmnt.ui.theme_manager import CONTROL_HEIGHT_PX, data_colors, data_font
+from serialmnt.ui.theme_manager import CONTROL_HEIGHT_PX, data_colors, data_font, log_level_color
 
 # 内存缓冲仍保留 100,000 条，界面只渲染最近若干条，避免整表重插阻塞主线程。
 _MAX_RENDERED_RECORDS = 2000
@@ -170,11 +178,15 @@ class ReceivePanel(QWidget):
         records_provider: Callable[[], tuple[LogRecord, ...]],
         clear_callback: Callable[[], int],
         preferences: SessionPreferences | None = None,
+        log_level_rules: tuple[LogLevelRule, ...] | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._records_provider = records_provider
         self._clear_callback = clear_callback
+        self._log_level_rules = (
+            DEFAULT_LOG_LEVEL_RULES if log_level_rules is None else tuple(log_level_rules)
+        )
         self._paused = False
         self._terminal_mode = False
         self._screen: TerminalScreen | None = None
@@ -222,6 +234,7 @@ class ReceivePanel(QWidget):
 
         self.output = TerminalOutput()
         self.output.setPlaceholderText("暂无数据")
+        self.output.set_log_level_rules(self._log_level_rules)
         self.output.setFont(data_font())
         self.output.set_wrap_enabled(self.wrap_check.isChecked())
         self.output.document().setMaximumBlockCount(_DOCUMENT_BLOCK_LIMIT)
@@ -401,6 +414,9 @@ class ReceivePanel(QWidget):
             self.output.render_screen(self._terminal_screen())
             self.find_bar.refresh()
             return
+        # 分栏视图的重绘必须从空文档开始，否则设置变更、主题切换和规则更新都会
+        # 把同一批记录重复追加到文档末尾。
+        self.output.clear_content()
         self.output.begin_batch_update()
         if hidden:
             self._insert_hint(f"… 已隐藏较早的 {hidden} 条记录，导出可获取完整缓冲")
@@ -425,6 +441,12 @@ class ReceivePanel(QWidget):
         """按全局字号更新接收区字体。"""
         self.output.setFont(data_font(size))
 
+    def set_log_level_rules(self, rules: Sequence[LogLevelRule]) -> None:
+        """应用新的日志级别规则并重绘当前内容。"""
+        self._log_level_rules = tuple(rules)
+        self.output.set_log_level_rules(self._log_level_rules)
+        self.render_records()
+
     def refresh_theme(self) -> None:
         """主题切换后按新配色重新渲染。"""
         self.render_records()
@@ -437,7 +459,7 @@ class ReceivePanel(QWidget):
         self.output.append_segments(self._record_segments(record))
 
     def _record_segments(self, record: LogRecord) -> tuple[tuple[str, str, bool], ...]:
-        """拆分一行记录：时间戳弱化、方向前缀着色加粗、正文用默认文本色。"""
+        """拆分一行记录：时间戳弱化、方向前缀着色加粗、正文逐行取色。"""
         colors = data_colors()
         if record.direction not in ("rx", "tx"):
             return ((self._format_record(record), colors.system, False),)
@@ -445,8 +467,34 @@ class ReceivePanel(QWidget):
         if self.timestamp_check.isChecked():
             segments.append((self._timestamp_prefix(record), colors.system, False))
         segments.append((f"{record.direction.upper()}: ", self._color_for(record), True))
-        segments.append((self._payload_text(record), colors.text, False))
+        segments.extend(self._payload_segments(record))
         return tuple(segments)
+
+    def _payload_segments(self, record: LogRecord) -> tuple[tuple[str, str, bool], ...]:
+        """拆分正文片段。
+
+        一次串口读取可能包含多行日志，文本模式下必须逐行匹配级别，
+        否则同批次里的 Error 会把 Warning、Pass 等行一起染成红色。
+        """
+        if self.display_mode == "hex" or record.direction != "rx":
+            return ((self._payload_text(record), self._payload_color(record), False),)
+        text_color = data_colors().text
+        return tuple(
+            (line, self._line_color(line, text_color), False)
+            for line in record.text.splitlines(keepends=True)
+        )
+
+    def _line_color(self, line: str, text_color: str) -> str:
+        rule = match_log_level(line, self._log_level_rules)
+        return text_color if rule is None else log_level_color(rule.color)
+
+    def _payload_color(self, record: LogRecord) -> str:
+        """HEX 模式与 TX 正文取色；文本模式 RX 由 ``_payload_segments()`` 逐行处理。"""
+        text_color = data_colors().text
+        if record.direction != "rx":
+            return text_color
+        rule = match_log_level(record.text, self._log_level_rules)
+        return text_color if rule is None else log_level_color(rule.color)
 
     def _timestamp_prefix(self, record: LogRecord) -> str:
         local_time = record.timestamp_utc.astimezone().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]

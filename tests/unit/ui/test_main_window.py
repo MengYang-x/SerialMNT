@@ -32,6 +32,7 @@ from serialmnt.application import MAX_SESSION_TITLE_LENGTH, SessionManager
 from serialmnt.domain import (
     DEFAULT_LINE_ENDING,
     AppConfig,
+    LogLevelRule,
     LogRecord,
     PortBusyError,
     PortInfo,
@@ -709,6 +710,11 @@ def _fragment_formats(output: TerminalOutput) -> list[tuple[str, str]]:
     return formats
 
 
+def _has_fragment_color(formats: list[tuple[str, str]], text: str, color: str) -> bool:
+    """判断某个文本是否以指定颜色出现；日志级别基底可能把相邻字符并入同一片段。"""
+    return any(text in fragment and fragment_color == color for fragment, fragment_color in formats)
+
+
 def _fragment_styles(output: TerminalOutput) -> list[tuple[str, str, bool]]:
     """按顺序返回文档片段的 (文本, 前景色, 是否加粗)，用于断言分层配色。"""
     styles: list[tuple[str, str, bool]] = []
@@ -774,9 +780,9 @@ def test_terminal_highlights_success_error_and_warning_keywords(qtbot: object) -
         formats = _fragment_formats(output)
         colors = highlight_colors()
 
-        assert ("OK", colors.success) in formats
-        assert ("ERROR", colors.error) in formats
-        assert ("WARN", colors.warning) in formats
+        assert _has_fragment_color(formats, "OK", colors.success)
+        assert _has_fragment_color(formats, "ERROR", colors.error)
+        assert _has_fragment_color(formats, "WARN", colors.warning)
     finally:
         tab.controller.close(force=True)
         window.close()
@@ -2445,5 +2451,23 @@ def test_receive_panel_empty_state_placeholder(qtbot: object) -> None:
 
         qtbot.mouseClick(tab.view_toggle_button, Qt.MouseButton.LeftButton)
         assert receive_panel.output.placeholderText() == "暂无数据"
+    finally:
+        window.close()
+
+
+def test_log_level_rules_apply_to_all_sessions(qtbot: object) -> None:
+    transport = FakeTransport()
+    window = _window(qtbot, transport)
+    try:
+        window.new_session()
+        rules = (LogLevelRule(field="Trace", color="#123456"),)
+
+        window._apply_log_level_rules(rules)
+
+        assert window.log_level_action.text() == "日志级别颜色…"
+        for index in range(window.tabs.count()):
+            tab = window.tabs.widget(index)
+            assert isinstance(tab, SessionTab)
+            assert tab.receive_panel._log_level_rules == rules
     finally:
         window.close()

@@ -5,6 +5,7 @@ from datetime import datetime
 
 from .codecs import decode_text, format_hex
 from .errors import UserFacingError, ValidationError
+from .log_levels import DEFAULT_LOG_LEVEL_RULES, LogLevelRule
 from .states import ACTIVE_FILE_TRANSFER_STATES, FileTransferState, SessionState
 from .types import (
     DEFAULT_DATA_FONT_SIZE,
@@ -52,6 +53,13 @@ def _require_bool(value: object, field_name: str) -> None:
 def _require_non_negative_int(value: object, field_name: str) -> None:
     if type(value) is not int or value < 0:
         raise ValidationError(f"{field_name} 必须是非负整数。")
+
+
+def _validate_log_level_rules(rules: object) -> None:
+    if not isinstance(rules, tuple):
+        raise ValidationError("日志级别规则必须是不可变 tuple。")
+    if any(not isinstance(rule, LogLevelRule) for rule in rules):
+        raise ValidationError("日志级别规则只能包含 LogLevelRule。")
 
 
 @dataclass(frozen=True, slots=True)
@@ -286,6 +294,7 @@ class AppConfig:
     sidebar_width: int = 320
     content_splitter_state: str | None = None
     data_font_size: int = DEFAULT_DATA_FONT_SIZE
+    log_level_rules: tuple[LogLevelRule, ...] = DEFAULT_LOG_LEVEL_RULES
 
     def __post_init__(self) -> None:
         if type(self.schema_version) is not int or self.schema_version <= 0:
@@ -321,3 +330,4 @@ class AppConfig:
             self.content_splitter_state, str
         ):
             raise ValidationError("content_splitter_state 必须是字符串或 None。")
+        _validate_log_level_rules(self.log_level_rules)

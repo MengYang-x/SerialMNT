@@ -29,6 +29,14 @@ from .errors import (
     UserFacingError,
     ValidationError,
 )
+from .log_levels import (
+    DEFAULT_LOG_LEVEL_COLOR,
+    DEFAULT_LOG_LEVEL_RULES,
+    LOG_LEVEL_SEMANTIC_COLORS,
+    MAX_LOG_LEVEL_FIELD_LENGTH,
+    LogLevelRule,
+    match_log_level,
+)
 from .models import (
     AppConfig,
     FileTransferSnapshot,
@@ -66,8 +74,12 @@ from .updates import ReleaseInfo, is_newer_version, normalize_version, parse_ver
 __all__ = [
     "ACTIVE_FILE_TRANSFER_STATES",
     "DEFAULT_LINE_ENDING",
+    "DEFAULT_LOG_LEVEL_COLOR",
+    "DEFAULT_LOG_LEVEL_RULES",
     "DEFAULT_MAX_BYTES",
     "DEFAULT_MAX_RECORDS",
+    "LOG_LEVEL_SEMANTIC_COLORS",
+    "MAX_LOG_LEVEL_FIELD_LENGTH",
     "AppConfig",
     "BufferCapacityError",
     "Clock",
@@ -89,6 +101,7 @@ __all__ = [
     "LogDirection",
     "LogFormat",
     "LogIOError",
+    "LogLevelRule",
     "LogRecord",
     "LogSink",
     "Parity",
@@ -122,6 +135,7 @@ __all__ = [
     "encode_text",
     "format_hex",
     "is_newer_version",
+    "match_log_level",
     "normalize_version",
     "parse_hex",
     "parse_version",

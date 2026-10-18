@@ -19,9 +19,15 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QApplication, QMenu, QPlainTextEdit, QWidget
 
-from serialmnt.domain import TerminalCell, TerminalScreen, TerminalStyle
+from serialmnt.domain import (
+    LogLevelRule,
+    TerminalCell,
+    TerminalScreen,
+    TerminalStyle,
+    match_log_level,
+)
 from serialmnt.ui.terminal_highlight import find_highlights
-from serialmnt.ui.theme_manager import ansi_color, data_colors, highlight_colors
+from serialmnt.ui.theme_manager import ansi_color, data_colors, highlight_colors, log_level_color
 
 # 画面只渲染最近若干行，更早的滚动历史由终端模型保留。
 _MAX_RENDERED_ROWS = 2000
@@ -44,6 +50,7 @@ class TerminalOutput(QPlainTextEdit):
         self._mouse_pressed = False
         self._batch_update = False
         self._highlight_enabled = True
+        self._log_level_rules: tuple[LogLevelRule, ...] = ()
         self._deferred_render = False
         self._rendering = False
         self._scrolling = False
@@ -87,6 +94,10 @@ class TerminalOutput(QPlainTextEdit):
     def set_highlight_enabled(self, enabled: bool) -> None:
         """设置是否在终端视图中叠加地址、链接与关键字高亮。"""
         self._highlight_enabled = enabled
+
+    def set_log_level_rules(self, rules: Sequence[LogLevelRule]) -> None:
+        """设置终端视图整行着色的日志级别规则；规则顺序即优先级。"""
+        self._log_level_rules = tuple(rules)
 
     def set_wrap_enabled(self, enabled: bool) -> None:
         """设置超长行是否按控件宽度自动换行。"""
@@ -186,29 +197,32 @@ class TerminalOutput(QPlainTextEdit):
             cursor.setCharFormat(self._format_for(data_colors().system))
             cursor.insertText(f"… 已隐藏较早的 {hidden} 行\n")
         for index, row in enumerate(visible):
+            # 级别颜色是整行基底，关键字/地址高亮在其上局部覆盖。
+            row_override = self._log_level_override(row)
             highlights = self._highlight_overrides(row)
             if index == cursor_row:
-                self._write_cells(cursor, row, 0, cursor_col, highlights)
+                self._write_cells(cursor, row, 0, cursor_col, highlights, row_override)
                 self._input_start_position = cursor.position()
                 cursor.setCharFormat(self._format_for_style(TerminalStyle()))
                 if self._draft:
                     cursor.insertText(self._draft)
                 self._cursor_block_number = cursor.blockNumber()
             else:
-                self._write_cells(cursor, row, 0, None, highlights)
+                self._write_cells(cursor, row, 0, None, highlights, row_override)
             if index != len(visible) - 1:
                 cursor.insertText("\n")
         cursor.endEditBlock()
         self._place_input_cursor()
         self._scroll_after_update()
 
-    def _write_cells(
+    def _write_cells(  # noqa: PLR0913, PLR0917 - 行范围与两层颜色覆盖都是渲染上下文
         self,
         cursor: QTextCursor,
         row: tuple[TerminalCell, ...],
         start: int,
         end: int | None,
         highlights: dict[int, str],
+        row_override: str | None = None,
     ) -> None:
         limit = len(row) if end is None else min(end, len(row))
         index = start
@@ -218,14 +232,14 @@ class TerminalOutput(QPlainTextEdit):
                 index += 1
                 continue
             style = cell.style
-            override = highlights.get(index)
+            override = highlights.get(index, row_override)
             text = cell.char
             index += 1
             while (
                 index < limit
                 and not row[index].trailing
                 and row[index].style == style
-                and highlights.get(index) == override
+                and highlights.get(index, row_override) == override
             ):
                 text += row[index].char
                 index += 1
@@ -241,6 +255,13 @@ class TerminalOutput(QPlainTextEdit):
         if bold:
             text_format.setFontWeight(QFont.Weight.Bold)
         return text_format
+
+    def _log_level_override(self, row: tuple[TerminalCell, ...]) -> str | None:
+        """按整行文本匹配日志级别，返回需要覆盖整行前景的颜色。"""
+        if not self._log_level_rules:
+            return None
+        rule = match_log_level("".join(cell.char for cell in row), self._log_level_rules)
+        return None if rule is None else log_level_color(rule.color)
 
     def _highlight_overrides(self, row: tuple[TerminalCell, ...]) -> dict[int, str]:
         """按行文本匹配地址与链接，返回需要改色的单元格索引到颜色。"""

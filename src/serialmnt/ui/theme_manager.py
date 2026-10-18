@@ -6,7 +6,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QPalette
 from PySide6.QtWidgets import QApplication
 
-from serialmnt.domain import Theme
+from serialmnt.domain import DEFAULT_LOG_LEVEL_COLOR, Theme
 
 from .style_sheet import ThemeTokens, build_stylesheet, tokens
 
@@ -93,6 +93,22 @@ class HighlightColors:
     error: str
     warning: str
 
+
+# 默认日志级别规则的语义色：深浅主题各自取到满足正文对比度的一档。
+_LOG_LEVEL_COLORS: dict[str, dict[str, str]] = {
+    "light": {
+        "warning": "#8a5a00",
+        "error": "#b3261e",
+        "pass": "#14713d",
+        "debug": "#1f5fa8",
+    },
+    "dark": {
+        "warning": "#ffc14d",
+        "error": "#ff8a80",
+        "pass": "#5cc98c",
+        "debug": "#6fb3f2",
+    },
+}
 
 _HIGHLIGHT_COLORS: dict[str, HighlightColors] = {
     "light": HighlightColors(
@@ -202,6 +218,16 @@ def ansi_colors() -> tuple[str, ...]:
 def highlight_colors() -> HighlightColors:
     """返回当前主题下的终端模式高亮颜色。"""
     return _HIGHLIGHT_COLORS[_ThemeState.resolved]
+
+
+def log_level_color(color: str) -> str:
+    """把日志级别规则颜色解析为当前主题下的十六进制颜色。
+
+    ``default`` 跟随正文色，语义键随深浅主题切换，其余值视为固定 ``#RRGGBB``。
+    """
+    if color == DEFAULT_LOG_LEVEL_COLOR:
+        return data_colors().text
+    return _LOG_LEVEL_COLORS[_ThemeState.resolved].get(color, color)
 
 
 def ansi_color(index: int) -> str:
