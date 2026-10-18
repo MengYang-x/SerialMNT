@@ -402,11 +402,13 @@ class ReceivePanel(QWidget):
         self.find_bar.activate()
 
     def _find_bar_closed(self) -> None:
-        """关闭查找栏后把焦点还给接收区。"""
+        """关闭查找栏后把焦点还给接收区，并恢复自动滚动。"""
         if self._terminal_mode:
+            self.output.resume_follow()
             self.output.focus_input()
         else:
             self.output.setFocus(Qt.FocusReason.OtherFocusReason)
+            self.output.scroll_to_bottom()
 
     def _settings_changed(self) -> None:
         if self._loading:

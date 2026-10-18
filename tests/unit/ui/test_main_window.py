@@ -1290,6 +1290,87 @@ def test_split_drag_selection_ignores_data_arriving_while_pressed(qtbot: object)
     )
 
 
+def _wheel_output(output: TerminalOutput, steps: int) -> None:
+    """在接收区视口上逐格发送鼠标滚轮事件；正数向上、负数向下。"""
+    center = output.viewport().rect().center()
+    for _ in range(abs(steps)):
+        event = QWheelEvent(
+            QPointF(center),
+            QPointF(output.viewport().mapToGlobal(center)),
+            QPoint(0, 0),
+            QPoint(0, 120 if steps > 0 else -120),
+            Qt.MouseButton.NoButton,
+            Qt.KeyboardModifier.NoModifier,
+            Qt.ScrollPhase.NoScrollPhase,
+            False,
+        )
+        QApplication.sendEvent(output.viewport(), event)
+
+
+def test_split_click_keeps_mouse_scrolled_position(qtbot: object) -> None:
+    """回归：滚轮滚离底部后单击接收区，不得跳回日志末尾。"""
+    output = TerminalOutput()
+    qtbot.addWidget(output)
+    output.resize(400, 160)
+    for index in range(100):
+        output.append_text(f"line {index:03d} aaaa bbbb", data_colors().text)
+    output.show()
+    qtbot.waitUntil(lambda: output.verticalScrollBar().maximum() > 0, timeout=2000)
+
+    bar = output.verticalScrollBar()
+    _wheel_output(output, 5)
+    middle = bar.value()
+    assert middle < bar.maximum()
+
+    QTest.mouseClick(
+        output.viewport(),
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+        output.viewport().rect().center(),
+    )
+    assert bar.value() == middle
+
+    output.append_text("new data arrives", data_colors().text)
+    assert bar.value() == middle
+
+    _wheel_output(output, -20)
+    assert bar.value() == bar.maximum()
+    for _ in range(5):
+        output.append_text("follow resumed", data_colors().text)
+    # 布局更新可能让末行晚一拍，留一行容差；未恢复跟随时会落后 5 行。
+    qtbot.waitUntil(lambda: bar.value() >= bar.maximum() - 1, timeout=2000)
+
+
+def test_terminal_click_and_rebuild_keep_mouse_scrolled_position(qtbot: object) -> None:
+    """回归：终端视图滚离底部后，单击和新数据到达都不得把画面拉回末尾。"""
+    output = TerminalOutput()
+    qtbot.addWidget(output)
+    output.resize(400, 160)
+    output.set_terminal_mode(True)
+    screen = TerminalScreen()
+    screen.feed("".join(f"line {index:03d} aaaa bbbb\r\n" for index in range(100)))
+    output.render_screen(screen)
+    output.show()
+    qtbot.waitUntil(lambda: output.verticalScrollBar().maximum() > 0, timeout=2000)
+
+    bar = output.verticalScrollBar()
+    _wheel_output(output, 5)
+    middle = bar.value()
+    assert middle < bar.maximum()
+
+    QTest.mouseClick(
+        output.viewport(),
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+        output.viewport().rect().center(),
+    )
+    assert bar.value() == middle
+
+    screen.feed("new data arrives\r\n")
+    output.render_screen(screen)
+    assert bar.value() == middle
+
+
 def test_window_minimum_size_matches_layout_target(qtbot: object) -> None:
     transport = FakeTransport()
     window = _window(qtbot, transport)

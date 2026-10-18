@@ -16,6 +16,7 @@ from PySide6.QtGui import (
     QTextCharFormat,
     QTextCursor,
     QTextOption,
+    QWheelEvent,
 )
 from PySide6.QtWidgets import QApplication, QMenu, QPlainTextEdit, QWidget
 
@@ -54,12 +55,16 @@ class TerminalOutput(QPlainTextEdit):
         self._deferred_render = False
         self._rendering = False
         self._scrolling = False
+        self._follow_tail = True
         self.setReadOnly(True)
         self.setUndoRedoEnabled(False)
         self.setAcceptDrops(False)
         self.setCursorWidth(0)
         self.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
         self.selectionChanged.connect(self._on_selection_changed)
+        scroll_bar = self.verticalScrollBar()
+        scroll_bar.actionTriggered.connect(self._sync_follow_from_scroll_bar)
+        scroll_bar.sliderMoved.connect(self._sync_follow_from_scroll_bar)
 
     @property
     def draft(self) -> str:
@@ -77,6 +82,8 @@ class TerminalOutput(QPlainTextEdit):
         self._cursor_block_number = 0
         self._deferred_render = False
         super().clear()
+        # 视图切换会重建全部内容，从最新内容开始显示。
+        self._follow_tail = True
         self.setReadOnly(not enabled)
 
     def set_submit_handler(self, handler: Callable[[str], bool]) -> None:
@@ -135,6 +142,8 @@ class TerminalOutput(QPlainTextEdit):
         """清空控件内容；终端模式由调用方随后重建画面。"""
         self._deferred_render = False
         super().clear()
+        # 清屏后内容从空文档重新开始，下一次追加应当重新跟随末尾。
+        self._follow_tail = True
         self._input_start_position = 0
         self._cursor_block_number = 0
 
@@ -172,12 +181,20 @@ class TerminalOutput(QPlainTextEdit):
         screen = self._screen
         if screen is None:
             return
+        scroll_bar = self.verticalScrollBar()
+        follow_tail = self._follow_tail
+        previous_value = scroll_bar.value()
         self._deferred_render = False
         self._rendering = True
         try:
             self._rebuild_screen(screen)
         finally:
             self._rendering = False
+        if follow_tail:
+            self._scroll_after_update()
+        else:
+            # 重建会清空文档并把光标移到输入处，需恢复重建前的滚动位置。
+            scroll_bar.setValue(min(previous_value, scroll_bar.maximum()))
 
     def _rebuild_screen(self, screen: TerminalScreen) -> None:
         rows = screen.lines()
@@ -213,7 +230,6 @@ class TerminalOutput(QPlainTextEdit):
                 cursor.insertText("\n")
         cursor.endEditBlock()
         self._place_input_cursor()
-        self._scroll_after_update()
 
     def _write_cells(  # noqa: PLR0913, PLR0917 - 行范围与两层颜色覆盖都是渲染上下文
         self,
@@ -342,9 +358,27 @@ class TerminalOutput(QPlainTextEdit):
         caret.setPosition(end)
         self.setTextCursor(caret)
 
+    def resume_follow(self) -> None:
+        """恢复“跟随末尾”状态，不改变当前滚动位置。"""
+        self._follow_tail = True
+
+    def scroll_to_bottom(self) -> None:
+        """恢复跟随并滚动到末尾，供查找关闭等显式操作调用。"""
+        self.resume_follow()
+        self._scroll_after_update()
+
+    def _sync_follow_from_scroll_bar(self, _value: int = 0) -> None:
+        """按滚动条位置更新是否跟随末尾。
+
+        只由用户操作（滚轮、方向键、滚动条动作）调用；光标移动、选区和画面重建
+        引起的程序化滚动不算用户手动离开末尾。
+        """
+        scroll_bar = self.verticalScrollBar()
+        self._follow_tail = scroll_bar.value() >= scroll_bar.maximum()
+
     def _scroll_after_update(self) -> None:
-        """自动滚动到末尾；存在选中内容、正在滚动或按住鼠标时保持原位。"""
-        if not self._autoscroll or self._scrolling or self._mouse_held():
+        """跟随末尾时自动滚到底；用户已滚离底部、选中内容或按住鼠标时保持原位。"""
+        if not self._autoscroll or not self._follow_tail or self._scrolling or self._mouse_held():
             return
         if self.textCursor().hasSelection():
             return
@@ -423,6 +457,11 @@ class TerminalOutput(QPlainTextEdit):
         self._mouse_pressed = False
         self._on_selection_changed()
 
+    def wheelEvent(self, event: QWheelEvent) -> None:
+        """滚轮滚动后按新位置更新是否继续跟随末尾。"""
+        super().wheelEvent(event)
+        self._sync_follow_from_scroll_bar()
+
     def _mouse_held(self) -> bool:
         """本控件上按下的左键是否仍按住，用于暂停随数据到达的滚动与重绘。
 
@@ -449,12 +488,14 @@ class TerminalOutput(QPlainTextEdit):
         """限制编辑范围，并把回车和上下键交给终端命令处理。"""
         if not self._terminal_mode:
             super().keyPressEvent(event)
+            self._sync_follow_from_scroll_bar()
             return
         if self._handle_terminal_command(event) or self._guard_edit_key(event):
             return
         self._constrain_cursor()
         super().keyPressEvent(event)
         self._sync_draft_from_document()
+        self._sync_follow_from_scroll_bar()
 
     def _handle_terminal_command(self, event: QKeyEvent) -> bool:
         handled = False
