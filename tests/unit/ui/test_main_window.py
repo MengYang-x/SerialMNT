@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QInputDialog,
     QLineEdit,
+    QMainWindow,
     QMenuBar,
     QMessageBox,
     QPlainTextEdit,
@@ -1226,6 +1227,50 @@ def test_window_minimum_size_matches_layout_target(qtbot: object) -> None:
     assert window.minimumSize().width() == 900
     assert window.minimumSize().height() == 600
     window.close()
+
+
+def test_main_window_centers_on_primary_screen_at_startup(qtbot: object) -> None:
+    source = QMainWindow()
+    source.resize(1000, 700)
+    source.move(10, 10)
+    saved_geometry = bytes(source.saveGeometry().toBase64()).decode("ascii")
+    source.deleteLater()
+    preferences = SessionPreferences(
+        title="居中",
+        config=SerialConfig(port=""),
+        display_mode="text",
+        show_timestamp=True,
+        show_rx=True,
+        show_tx=True,
+        autoscroll=True,
+    )
+    config = AppConfig(
+        schema_version=1,
+        theme="system",
+        window_geometry=saved_geometry,
+        window_state=None,
+        active_session_index=0,
+        sessions=(preferences,),
+    )
+    manager = SessionManager(transport_factory=FakeTransport, clock=FakeClock())
+    window = MainWindow(
+        session_manager=manager,
+        port_provider=lambda: (PortInfo(device="COM1"),),
+        initial_config=config,
+    )
+    qtbot.addWidget(window)
+
+    try:
+        available = QApplication.primaryScreen().availableGeometry()
+        expected_left = max(
+            available.x() + (available.width() - window.width()) // 2, available.x()
+        )
+        expected_top = max(
+            available.y() + (available.height() - window.height()) // 2, available.y()
+        )
+        assert window.pos() == QPoint(expected_left, expected_top)
+    finally:
+        window.close()
 
 
 def test_main_window_uses_app_icon(qtbot: object) -> None:

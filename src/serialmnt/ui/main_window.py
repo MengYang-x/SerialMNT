@@ -149,6 +149,7 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(900, 600)
         self._build_actions()
         self._restore_or_create_sessions(initial_config)
+        self._center_on_primary_screen()
 
     def _build_actions(self) -> None:
         new_action = QAction("新建会话", self)
@@ -263,6 +264,22 @@ class MainWindow(QMainWindow):
         self._help_window.show()
         self._help_window.raise_()
         self._help_window.activateWindow()
+
+    def _center_on_primary_screen(self) -> None:
+        """启动时把普通窗口放到主屏可用区域的中央。
+
+        恢复的窗口几何只保留尺寸，位置每次重新计算；最大化或全屏时保持
+        用户上次的状态。窗口大于可用区域时贴住左上角，避免标题栏移出屏幕。
+        """
+        if self.isMaximized() or self.isFullScreen():
+            return
+        screen = QApplication.primaryScreen()
+        if screen is None:
+            return
+        available = screen.availableGeometry()
+        left = max(available.x() + (available.width() - self.width()) // 2, available.x())
+        top = max(available.y() + (available.height() - self.height()) // 2, available.y())
+        self.move(left, top)
 
     def _new_session(self, _checked: bool = False) -> None:
         """标签栏“+”按钮和“☰”菜单共用的零参数入口。
