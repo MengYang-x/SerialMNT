@@ -92,6 +92,8 @@ class ConnectionPanel(QGroupBox):
     def _build_ui(self) -> None:
         self._build_connection_inputs()
         layout = QFormLayout(self)
+        # QSS 的 QGroupBox padding 已提供内边距，布局默认外边距会再叠加 9px，这里归零。
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         port_row = QWidget()
         port_row_layout = QHBoxLayout(port_row)

@@ -100,10 +100,16 @@ class FileTransferPanel(QGroupBox):
         self.cancel_button.setToolTip("中止本次传输，并向接收端发送取消序列")
 
         layout = QGridLayout(self)
+        # QSS 的 QGroupBox padding 已提供内边距，布局默认外边距会再叠加 9px，这里归零。
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
-        layout.addWidget(QLabel("文件"), 0, 0)
-        layout.addWidget(self.file_edit, 0, 1)
-        layout.addWidget(self.browse_button, 0, 2)
+        # 文件行独占整行：标签从内容左边缘开始，不再与“1K 块”共用列而留下空白。
+        file_row = QHBoxLayout()
+        file_row.setSpacing(4)
+        file_row.addWidget(QLabel("文件"))
+        file_row.addWidget(self.file_edit, 1)
+        file_row.addWidget(self.browse_button)
+        layout.addLayout(file_row, 0, 0, 1, 3)
         layout.addWidget(self.block_check, 1, 0)
         layout.addWidget(self.progress_bar, 1, 1)
         layout.addWidget(self.percent_label, 1, 2)

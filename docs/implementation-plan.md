@@ -98,7 +98,7 @@ V1 包含：
 
 ### 2.6 当前项目状态
 
-- M0-M5 已实现，当前软件版本为 `0.2.1`；M6 增量「Ymodem 单文件发送」已实现。
+- M0-M5 已实现，当前软件版本为 `0.2.2`；M6 增量「Ymodem 单文件发送」已实现。
 - 当前实现开发指南见 `docs/developer-guide.md`，用户操作见 `docs/user-guide.md`。
 - GitHub Actions 已承担文档同步、Ruff 和 pytest 快速质量门禁；单文件构建仍在对应操作系统本地执行。
 - Windows/Linux 真实串口、单文件冷启动和长时间稳定性验收仍按发布清单执行。

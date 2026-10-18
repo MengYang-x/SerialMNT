@@ -3,7 +3,7 @@
 from dataclasses import replace
 from pathlib import Path
 
-from PySide6.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QGridLayout, QMessageBox
 from tests.fixtures.fakes import FakeClock, FakeTransport
 
 from serialmnt.application import SessionController, SessionControllerOptions
@@ -64,6 +64,32 @@ def test_panel_requires_connection_and_selected_file(qtbot: object, tmp_path: Pa
         assert panel.block_size == 1024
         panel.block_check.setChecked(False)
         assert panel.block_size == 128
+    finally:
+        controller.close(force=True)
+
+
+def test_panel_file_row_is_compact(qtbot: object, tmp_path: Path) -> None:
+    controller = _controller()
+    panel = FileTransferPanel(controller=controller)
+    qtbot.addWidget(panel)  # type: ignore[attr-defined]
+    try:
+        path = tmp_path / "firmware.bin"
+        path.write_bytes(b"x" * 10)
+        panel.set_file_path(path)
+        panel.show()
+        panel.resize(272, 200)
+        qtbot.wait(50)  # type: ignore[attr-defined]
+
+        grid = panel.layout()
+        assert isinstance(grid, QGridLayout)
+        file_row = grid.itemAtPosition(0, 0).layout()
+        assert file_row is not None
+        file_label = file_row.itemAt(0).widget()
+        # “文件”从内容左边缘开始并紧贴路径框，“…”与百分比同右边缘。
+        assert file_label.geometry().left() == panel.block_check.geometry().left()
+        assert file_label.geometry().right() < panel.file_edit.geometry().left()
+        assert panel.file_edit.geometry().left() - file_label.geometry().right() <= 8
+        assert panel.browse_button.geometry().right() == panel.percent_label.geometry().right()
     finally:
         controller.close(force=True)
 

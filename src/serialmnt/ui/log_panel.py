@@ -65,15 +65,19 @@ class LogPanel(QGroupBox):
         self._status_text = ""
 
         layout = QGridLayout(self)
-        # 勾选和格式同排两端对齐；选目录收进目录行的“…”按钮，不再单独占一行。
+        # QSS 的 QGroupBox padding 已提供内边距，布局默认外边距会再叠加 9px，这里归零。
+        layout.setContentsMargins(0, 0, 0, 0)
+        # 勾选和格式同排；选目录收进目录行的“…”按钮，不再单独占一行。
         layout.addWidget(self.enabled_check, 0, 0)
-        layout.addWidget(self.format_combo, 0, 1, Qt.AlignmentFlag.AlignRight)
-        layout.addWidget(QLabel("目录"), 1, 0)
+        # 格式下拉框左对齐，与下方目录输入框同列同起点，不再横跨到面板最右端。
+        layout.addWidget(self.format_combo, 0, 1)
+        # 目录行独占整行：标签从内容左边缘开始，不再与“自动保存”共用列而留下空白。
         directory_row = QHBoxLayout()
         directory_row.setSpacing(4)
+        directory_row.addWidget(QLabel("目录"))
         directory_row.addWidget(self.directory_edit, 1)
         directory_row.addWidget(self.browse_button)
-        layout.addLayout(directory_row, 1, 1)
+        layout.addLayout(directory_row, 1, 0, 1, 2)
         # 打开目录与导出同排，导出占比更宽以体现主操作。
         action_row = QHBoxLayout()
         action_row.setSpacing(6)
@@ -123,9 +127,10 @@ class LogPanel(QGroupBox):
             self._set_status("")
 
     def _set_status(self, text: str) -> None:
-        """设置状态文本，始终保留完整提示并按宽度做中间省略。"""
+        """设置状态文本，始终保留完整提示并按宽度做中间省略；空文本收起整行。"""
         self._status_text = text
         self.status_label.setToolTip(text)
+        self.status_label.setVisible(bool(text))
         self._apply_status_elide()
 
     def _apply_status_elide(self) -> None:
