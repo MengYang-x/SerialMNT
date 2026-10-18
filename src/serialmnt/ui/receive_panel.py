@@ -3,8 +3,8 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from PySide6.QtCore import QObject, QSignalBlocker, Signal
-from PySide6.QtGui import QAction, QResizeEvent
+from PySide6.QtCore import QObject, QSignalBlocker, Qt, Signal
+from PySide6.QtGui import QAction, QKeySequence, QResizeEvent, QShortcut
 from PySide6.QtWidgets import (
     QAbstractButton,
     QCheckBox,
@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from serialmnt.domain import DisplayMode, LogRecord, SessionPreferences, TerminalScreen
+from serialmnt.ui.find_bar import FindBar
 from serialmnt.ui.no_wheel_combo import NoWheelComboBox
 from serialmnt.ui.terminal_output import TerminalOutput
 from serialmnt.ui.theme_manager import CONTROL_HEIGHT_PX, data_colors, data_font
@@ -225,11 +226,18 @@ class ReceivePanel(QWidget):
         self.output.set_wrap_enabled(self.wrap_check.isChecked())
         self.output.document().setMaximumBlockCount(_DOCUMENT_BLOCK_LIMIT)
 
+        self.find_bar = FindBar(self.output, self)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
         layout.addLayout(header)
+        layout.addWidget(self.find_bar)
         layout.addWidget(self.output)
+
+        self.find_shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.Find), self)
+        self.find_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        self.find_shortcut.activated.connect(self._open_find_bar)
+        self.find_bar.closed.connect(self._find_bar_closed)
 
     def _assemble_header_row(self, header: QHBoxLayout, heading: QLabel) -> None:
         """按“标题—过滤—操作”顺序装配标题行，并压到统一控件高度。"""
@@ -384,11 +392,14 @@ class ReceivePanel(QWidget):
         """重新渲染最近的记录，超出渲染上限的部分用提示行说明。"""
         if self._paused:
             return
+        # 查找选区会让终端视图延迟重建，重建前先清除，重建后再重新定位匹配。
+        self.find_bar.suspend()
         records = self._records_provider()
         hidden = max(len(records) - _MAX_RENDERED_RECORDS, 0)
         self.output.set_autoscroll(self.autoscroll_check.isChecked())
         if self._terminal_mode:
             self.output.render_screen(self._terminal_screen())
+            self.find_bar.refresh()
             return
         self.output.begin_batch_update()
         if hidden:
@@ -397,6 +408,7 @@ class ReceivePanel(QWidget):
             if self._should_show(record):
                 self._insert_record(record)
         self.output.end_batch_update()
+        self.find_bar.refresh()
 
     def _terminal_screen(self) -> TerminalScreen:
         """返回终端模型；首次进入终端视图时用最近记录重建。"""
@@ -463,6 +475,17 @@ class ReceivePanel(QWidget):
             return colors.tx
         return colors.system
 
+    def _open_find_bar(self) -> None:
+        """显示查找栏并把焦点移到关键词输入框。"""
+        self.find_bar.activate()
+
+    def _find_bar_closed(self) -> None:
+        """关闭查找栏后把焦点还给接收区。"""
+        if self._terminal_mode:
+            self.output.focus_input()
+        else:
+            self.output.setFocus(Qt.FocusReason.OtherFocusReason)
+
     def _settings_changed(self) -> None:
         if self._loading:
             return
@@ -493,4 +516,6 @@ class ReceivePanel(QWidget):
         self.output.clear_content()
         if self._terminal_mode:
             self._screen = None
+        self.find_bar.refresh()
+        if self._terminal_mode:
             self.render_records()
