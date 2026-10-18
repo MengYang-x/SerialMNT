@@ -25,6 +25,7 @@ from serialmnt.domain import (
     SessionState,
     ValidationError,
 )
+from serialmnt.ui.no_wheel_combo import NoWheelComboBox
 
 _BAUDRATES = ("9600", "19200", "38400", "57600", "115200", "230400", "460800", "921600")
 _PARITIES = (("无", "N"), ("偶校验", "E"), ("奇校验", "O"), ("标记", "M"), ("空格", "S"))
@@ -116,7 +117,7 @@ class ConnectionPanel(QGroupBox):
         layout.addRow(self.connect_button)
 
     def _build_connection_inputs(self) -> None:
-        self.port_combo = QComboBox()
+        self.port_combo = NoWheelComboBox()
         self.port_combo.setEditable(True)
         self.port_combo.setMinimumWidth(120)
         self.refresh_button = QToolButton()
@@ -128,22 +129,22 @@ class ConnectionPanel(QGroupBox):
         self.refresh_button.setIconSize(QSize(22, 22))
         self.refresh_button.setFixedSize(26, 26)
         self.refresh_button.clicked.connect(self._refresh_ports)
-        self.baud_combo = QComboBox()
+        self.baud_combo = NoWheelComboBox()
         self.baud_combo.setEditable(True)
         self.baud_combo.addItems(_BAUDRATES)
-        self.bytesize_combo = QComboBox()
+        self.bytesize_combo = NoWheelComboBox()
         for value in (5, 6, 7, 8):
             self.bytesize_combo.addItem(str(value), value)
-        self.parity_combo = QComboBox()
+        self.parity_combo = NoWheelComboBox()
         for label, value in _PARITIES:
             self.parity_combo.addItem(label, value)
-        self.stopbits_combo = QComboBox()
+        self.stopbits_combo = NoWheelComboBox()
         for label, value in (("1", 1.0), ("1.5", 1.5), ("2", 2.0)):
             self.stopbits_combo.addItem(label, value)
-        self.flow_combo = QComboBox()
+        self.flow_combo = NoWheelComboBox()
         for label, value in _FLOW_CONTROLS:
             self.flow_combo.addItem(label, value)
-        self.encoding_combo = QComboBox()
+        self.encoding_combo = NoWheelComboBox()
         for label, value in _ENCODINGS:
             self.encoding_combo.addItem(label, value)
         self.dtr_check = QCheckBox("DTR")

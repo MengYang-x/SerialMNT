@@ -1,7 +1,7 @@
 # SerialMNT 当前实现开发指南
 
 > 文档版本：1.0  
-> 软件版本：0.3.0  
+> 软件版本：0.3.1  
 > 对应基线提交：`cb6c23a`  
 > 更新时间：2026-10-18  
 > 适用读者：维护者、测试人员和参与扩展的开发者
@@ -237,6 +237,7 @@ CSV 输出使用 `utf-8-sig` 和 RFC 4180 字段：`timestamp`、`direction`、`
 - `HelpWindow`：由 ☰ 菜单“使用帮助”（`F1`）打开的非模态帮助窗口，左侧 `QListWidget` 目录、右侧只读 `QTextBrowser` 正文，中间用 `QSplitter` 分隔；正文由 `setMarkdown()` 渲染随包分发的 `ui/assets/user-guide.md`（与 `docs/user-guide.md` 逐字节一致，由单元测试守卫），目录取 `headingLevel() == 2` 的标题块并用 `block.position()` 记录位置，选中目录项时把 `QTextCursor` 移到该位置后 `ensureCursorVisible()`；资源缺失时只显示一行降级提示而不抛错；`MainWindow._show_help()` 懒创建并复用单实例。
 - `SessionTab`：用水平 `QSplitter` 组合左侧设置面板和右侧收发区；设置面板是 `QScrollArea`，内容控件挂在 `sidebar_content` 上并顶部对齐（末尾 `addStretch(1)`，多余高度留在滚动区背景而不是分组框内部），接收标题行最左侧是侧栏折叠按钮，右侧依次是“发送设置”（按下文 `fold_rank` 参与溢出折叠）和“终端/分栏”；终端视图隐藏 `SendPanel`、收起垂直分隔条，接收区末尾使用原始流内联输入；切回分栏恢复原比例，视图模式随标签持久化，底部状态条由 `state_indicator` 色点和 `status_label` 组成；快照标题变化时发出 `title_changed(str)`，由窗口据此刷新标签文本与 tooltip。
 - 分组框内边距：`ConnectionPanel`、`FileTransferPanel` 和 `LogPanel` 的布局外边距均设为 0，内边距统一由 QSS `QGroupBox` 的 `padding` 提供；否则 Qt 默认布局外边距会与 QSS 内边距叠加 9 px，三个分组的左边缘也会错位。
+- 下拉框滚轮：所有下拉框统一使用 `ui/no_wheel_combo.py` 的 `NoWheelComboBox`，`wheelEvent()` 直接忽略滚轮事件，避免滚动侧栏或页面时误改端口、波特率、主题、字号等选项；被忽略的事件继续向父控件传播，侧栏仍可正常滚动，展开列表内的滚动不受影响。`tests/unit/ui/test_no_wheel_combo.py` 用 AST 守卫禁止 UI 模块直接实例化 `QComboBox`。
 - `ConnectionPanel`：端口刷新、配置校验、连接/断开、DTR/RTS 和文本编码选择；`encoding_combo` 提供 `UTF-8`/`GB18030`/`ASCII` 三选一，`build_config()` 读取其 `userData`，并与其余连接参数一同在连接中禁用。表单标签右对齐，端口集合不变时不重建下拉框以保留输入光标；`set_refresh_active()` 按标签可见性启停轮询，自动枚举周期为 30 s，端口行右侧 `refresh_button` 可手动立即枚举（连接中与端口控件一同禁用）；该按钮固定为 26×26，并把 `iconSize` 显式设为 22×22，因为 `QToolButton` 默认按样式表取 16 px 图标，在高分屏上过小不易辨认。下拉项显示「设备名 · 描述」并用 `userData` 存设备名，端口框只显示设备名；`current_port()` 解析真正的端口值，`describe_port()` 供状态栏显示带描述的文本，弹窗宽度按最长项自适应（上限 480 px）。
 - `ReceivePanel`：接收标题行（格式、时间戳、方向过滤、暂停、清屏、高亮、自动换行、自动滚动）和内存缓冲显示；输出控件为 `TerminalOutput`，空文档时用 `setPlaceholderText("暂无数据")` 显示空态，终端视图下清空该占位文字以免与块状光标重叠。标题行控件在创建时就带上面板作为父对象：标题行布局挂载前还没有宿主控件，控件若此时没有父对象，`setVisible(True)` 会把它当成顶层窗口弹出，启动和新建会话时会闪出小窗。标题行由 `_HeaderOverflow` 管理：`_FOLD_RANKS` 给出折叠优先级（数值越大越先折叠），`resizeEvent` 触发 `reflow()`，用各控件 `sizeHint()` 之和与面板宽度比较后决定折叠集合——只隐藏原控件并在最右端“⋯”菜单挂一个同名等价 `QAction`（勾选框双向同步），不搬动控件；“⋯”本身尺寸固定为 `CONTROL_HEIGHT_PX`，无折叠项时隐藏。`set_mode_visible()` 是标题行可见性的唯一写入方，统一按“模式可见且未折叠”设置 `setVisible()`，终端模式不再直接改控件可见性。终端模式把 RX 文本喂给 `TerminalScreen` 后按网格渲染，不应用时间戳/RX/TX 过滤并隐藏这些控件；首次进入终端视图时用最近 2000 条 RX 文本重建模型，切换回分栏时丢弃，暂停时继续喂模型但冻结渲染，清屏同时重置模型；草稿不写入记录缓冲或导出。取色走 `theme_manager.data_colors()`，分栏视图按方向分层着色：时间戳用 `system` 灰、`RX`/`TX` 前缀用 `rx`/`tx` 方向色加粗、正文用 `text` 默认色，`SYSTEM` 记录整行灰色；可通过 `add_leading_header_widget()`/`add_trailing_header_widget()`（可选 `fold_rank` 关键字，默认 0 表示永不折叠）在标题行两侧插入外部控件，并通过 `refresh_theme()` 响应主题切换。
 - `SendPanel`：分栏视图使用两行标题（格式/换行/发送、历史/间隔/周期）、文本/HEX 编码和周期发送；编辑器使用等宽字体，标题行下拉框与按钮统一为 `CONTROL_HEIGHT_PX`。发送编辑器高度跟随内容（最多 `_EDITOR_MAX_LINES` 行，再多转为内部滚动），面板垂直方向取 `Maximum` 策略把多余高度让给接收区；高度按文档布局的块矩形累加得出，且必须等事件循环下一轮再量——`documentSizeChanged` 触发时块的行布局还没算完，量到的是空值。终端视图不再使用独立发送控件，`send_content()` 负责发送内联终端提交的单行文本；构造出的 payload 为空时直接视为成功无操作，不调用 controller。

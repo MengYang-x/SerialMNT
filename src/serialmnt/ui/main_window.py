@@ -52,6 +52,7 @@ from serialmnt.domain import (
 )
 from serialmnt.ui.app_icon import app_icon
 from serialmnt.ui.help_window import HelpWindow
+from serialmnt.ui.no_wheel_combo import NoWheelComboBox
 from serialmnt.ui.qt_bridge import QtSessionBridge
 from serialmnt.ui.session_tab import _SIDEBAR_DEFAULT_WIDTH, SessionTab
 from serialmnt.ui.theme_manager import (
@@ -237,7 +238,7 @@ class MainWindow(QMainWindow):
 
     def _build_font_combo(self) -> QComboBox:
         """构造全局字号下拉框，首项为跟随系统默认。"""
-        combo = QComboBox()
+        combo = NoWheelComboBox()
         combo.addItem("默认", 0)
         for size in DATA_FONT_PRESETS:
             combo.addItem(str(size), size)
@@ -251,7 +252,7 @@ class MainWindow(QMainWindow):
 
     def _build_theme_combo(self) -> QComboBox:
         """构造全局主题下拉框。"""
-        combo = QComboBox()
+        combo = NoWheelComboBox()
         for label, value in _THEMES:
             combo.addItem(label, value)
         index = combo.findData(self._theme)

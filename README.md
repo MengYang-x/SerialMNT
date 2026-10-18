@@ -2,11 +2,11 @@
 
 SerialMNT 是一个面向开发者与测试人员的跨平台串口调试助手。项目计划支持多标签串口会话、文本与 HEX 收发、Ymodem 文件发送、日志导出、周期发送，以及 Windows 和 Linux 单文件分发。
 
-> 原作者：<https://github.com/Queqiongtao/QSerialTool>
+> 参考项目：<https://github.com/Queqiongtao/QSerialTool>
 
 ## 当前状态
 
-当前软件版本：**0.3.0**。工程当前处于 **M5：发布质量**，M0-M4 功能已完成。
+当前软件版本：**0.3.1**。工程当前处于 **M5：发布质量**，M0-M4 功能已完成。
 
 已完成：
 

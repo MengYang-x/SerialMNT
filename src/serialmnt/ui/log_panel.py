@@ -6,7 +6,6 @@ from PySide6.QtCore import Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices, QResizeEvent
 from PySide6.QtWidgets import (
     QCheckBox,
-    QComboBox,
     QFileDialog,
     QGridLayout,
     QGroupBox,
@@ -22,6 +21,7 @@ from PySide6.QtWidgets import (
 
 from serialmnt.application import SessionController, default_log_directory
 from serialmnt.domain import DomainError, LogFormat, SessionSnapshot, SessionState
+from serialmnt.ui.no_wheel_combo import NoWheelComboBox
 
 
 class LogPanel(QGroupBox):
@@ -49,7 +49,7 @@ class LogPanel(QGroupBox):
 
     def _build_ui(self) -> None:
         self.enabled_check = QCheckBox("自动保存")
-        self.format_combo = QComboBox()
+        self.format_combo = NoWheelComboBox()
         self.format_combo.addItem("CSV", "csv")
         self.format_combo.addItem("TXT", "txt")
         self.directory_edit = QLineEdit()

@@ -27,6 +27,7 @@ from serialmnt.domain import (
     encode_text,
     parse_hex,
 )
+from serialmnt.ui.no_wheel_combo import NoWheelComboBox
 from serialmnt.ui.theme_manager import CONTROL_HEIGHT_PX, data_font
 
 _EDITOR_MAX_LINES = 5  # 发送输入框最多长到几行高，再多转为内部滚动
@@ -84,10 +85,10 @@ class SendPanel(QWidget):
         heading_font = self.heading_label.font()
         heading_font.setBold(True)
         self.heading_label.setFont(heading_font)
-        self.mode_combo = QComboBox()
+        self.mode_combo = NoWheelComboBox()
         self.mode_combo.addItem("文本", "text")
         self.mode_combo.addItem("HEX", "hex")
-        self.newline_combo = QComboBox()
+        self.newline_combo = NoWheelComboBox()
         for label, value in _NEWLINES:
             self.newline_combo.addItem(label, value)
         self.newline_combo.setCurrentIndex(self.newline_combo.findData(DEFAULT_LINE_ENDING))
@@ -113,7 +114,7 @@ class SendPanel(QWidget):
         options = QHBoxLayout(row)
         options.setContentsMargins(0, 0, 0, 0)
         options.setSpacing(6)
-        self.history_combo = QComboBox()
+        self.history_combo = NoWheelComboBox()
         self.history_combo.setSizeAdjustPolicy(
             QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
         )

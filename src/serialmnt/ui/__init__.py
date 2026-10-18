@@ -5,6 +5,7 @@ from .file_transfer_panel import FileTransferPanel
 from .help_window import HelpWindow
 from .log_panel import LogPanel
 from .main_window import MainWindow
+from .no_wheel_combo import NoWheelComboBox
 from .qt_bridge import QtSessionBridge
 from .receive_panel import ReceivePanel
 from .send_panel import SendPanel
@@ -19,6 +20,7 @@ __all__ = [
     "HelpWindow",
     "LogPanel",
     "MainWindow",
+    "NoWheelComboBox",
     "QtSessionBridge",
     "ReceivePanel",
     "SendPanel",

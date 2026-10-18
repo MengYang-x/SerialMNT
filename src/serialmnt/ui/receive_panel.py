@@ -8,7 +8,6 @@ from PySide6.QtGui import QAction, QResizeEvent
 from PySide6.QtWidgets import (
     QAbstractButton,
     QCheckBox,
-    QComboBox,
     QHBoxLayout,
     QLabel,
     QMenu,
@@ -20,6 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from serialmnt.domain import DisplayMode, LogRecord, SessionPreferences, TerminalScreen
+from serialmnt.ui.no_wheel_combo import NoWheelComboBox
 from serialmnt.ui.terminal_output import TerminalOutput
 from serialmnt.ui.theme_manager import CONTROL_HEIGHT_PX, data_colors, data_font
 
@@ -198,7 +198,7 @@ class ReceivePanel(QWidget):
         heading_font = heading.font()
         heading_font.setBold(True)
         heading.setFont(heading_font)
-        self.mode_combo = QComboBox(self)
+        self.mode_combo = NoWheelComboBox(self)
         self.mode_combo.addItem("文本", "text")
         self.mode_combo.addItem("HEX", "hex")
         self.timestamp_check = QCheckBox("时间戳", self)
