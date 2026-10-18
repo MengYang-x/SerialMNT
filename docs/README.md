@@ -3,7 +3,7 @@
 > 文档版本：1.1  
 > 软件版本：0.1.0  
 > 对应基线提交：`cb6c23a`  
-> 更新时间：2026-10-04 18:23:19 CST（星期日）
+> 更新时间：2026-10-18
 
 ## 文档职责
 
@@ -50,8 +50,11 @@ git config core.hooksPath .githooks
 .\.venv\Scripts\python.exe scripts\check_docs_sync.py --staged
 .\.venv\Scripts\python.exe scripts\check_docs_sync.py --base origin/main
 .\.venv\Scripts\python.exe scripts\check_docs_sync.py --working-tree
+.\.venv\Scripts\python.exe scripts\check_version_sync.py
 .\.venv\Scripts\python.exe scripts\check_commit_message.py
 .\.venv\Scripts\python.exe scripts\check_commit_message.py --base origin/main
 ```
 
-GitHub Actions 会在 push 和 pull request 上再次执行文档同步、提交信息中文校验、Ruff 和 pytest。机器检查只能保证相关文档被纳入同一变更、提交信息包含中文，内容准确性仍需代码审查确认。
+版本号规则见 `AGENT.md` §2.4：版本号唯一来源是 `src/serialmnt/__init__.py`，改变运行行为时同步更新三处文档版本头和 `user-guide.md` 第 10 章“软件版本”；`check_version_sync.py` 校验这些位置与随包手册是否一致。
+
+GitHub Actions 会在 push 和 pull request 上再次执行文档同步、版本同步、提交信息中文校验、Ruff 和 pytest。机器检查只能保证相关文档被纳入同一变更、版本号同步且提交信息包含中文，内容准确性仍需代码审查确认。

@@ -11,6 +11,7 @@ fi
 
 cd "$ROOT"
 "$PYTHON" scripts/check_docs_sync.py --working-tree
+"$PYTHON" scripts/check_version_sync.py
 "$PYTHON" -m ruff format --check .
 "$PYTHON" -m ruff check .
 QT_QPA_PLATFORM=offscreen "$PYTHON" -m pytest

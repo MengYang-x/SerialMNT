@@ -62,10 +62,13 @@ def test_help_action_opens_single_reusable_window(qtbot: object) -> None:
 def test_help_toc_lists_sections_and_jumps(qtbot: object) -> None:
     window, help_window = _open_help(qtbot)
     try:
-        assert help_window.toc.count() == 9
+        assert help_window.toc.count() == 10
         assert help_window.toc.item(0).text() == "1. 安装与启动"
+        assert help_window.toc.item(9).text() == "10. 软件版本"
         help_window.toc.setCurrentRow(6)
         assert help_window.content.textCursor().block().text() == "7. 配置、退出与恢复"
+        help_window.toc.setCurrentRow(9)
+        assert help_window.content.textCursor().block().text() == "10. 软件版本"
     finally:
         window.close()
 

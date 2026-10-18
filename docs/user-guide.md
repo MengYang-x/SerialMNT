@@ -286,3 +286,8 @@ ${XDG_CONFIG_HOME:-$HOME/.config}/SerialMNT/settings.json
 - 终端仿真支持 16 色与 256 色，不支持真彩、alternate screen、滚动区域和 OSC 标题；终端滚动历史上限 5000 行，画面只渲染最近 2000 行。
 - Windows 和 Linux 单文件必须分别在对应操作系统上构建。
 - 单文件程序未包含自动更新和代码签名；下载后应核对 SHA-256。
+
+## 10. 软件版本
+
+- V0.1.0
+    1. 添加 Ymodem 协议发送文件功能

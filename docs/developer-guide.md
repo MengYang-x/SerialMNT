@@ -253,8 +253,11 @@ CSV 输出使用 `utf-8-sig` 和 RFC 4180 字段：`timestamp`、`direction`、`
 ```powershell
 .\.venv\Scripts\python.exe -m ruff format --check .
 .\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe scripts\check_version_sync.py
 .\.venv\Scripts\python.exe -m pytest
 ```
+
+版本号与变更记录规则见 `AGENT.md` §2.4。`check_version_sync.py` 校验 `src/serialmnt/__init__.py` 的 `__version__`、三处文档版本头、`user-guide.md` 第 10 章条目以及随包手册副本是否一致；CI 和构建脚本都会执行该检查。
 
 启用本地 Hook（`pre-commit` 文档同步与 `commit-msg` 提交信息校验）：
 

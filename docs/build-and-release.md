@@ -26,11 +26,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build.ps1
 脚本依次执行：
 
 1. 文档同步检查。
-2. Ruff 格式检查。
-3. Ruff 静态检查。
-4. pytest 全部测试。
-5. PyInstaller 单文件构建。
-6. 生成 SHA-256 校验文件。
+2. 版本同步检查（版本号、文档版本头和用户手册版本记录）。
+3. Ruff 格式检查。
+4. Ruff 静态检查。
+5. pytest 全部测试。
+6. PyInstaller 单文件构建。
+7. 生成 SHA-256 校验文件。
 
 产物：
 
@@ -63,7 +64,7 @@ dist/SerialMNT.sha256
 git config core.hooksPath .githooks
 ```
 
-提交时 Hook 检查暂存变更与受影响文档是否属于同一提交。构建脚本会检查当前工作区；GitHub Actions 会在 push 和 pull request 上重新检查提交范围，并运行 Ruff 与 pytest。CI 不构建或发布单文件产物，Windows/Linux 构建仍必须在对应系统执行。
+提交时 Hook 检查暂存变更与受影响文档是否属于同一提交。构建脚本会检查当前工作区的文档同步和版本同步；GitHub Actions 会在 push 和 pull request 上重新检查提交范围、版本同步，并运行 Ruff 与 pytest。CI 不构建或发布单文件产物，Windows/Linux 构建仍必须在对应系统执行。
 
 ## 运行依赖
 

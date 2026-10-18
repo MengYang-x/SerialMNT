@@ -41,7 +41,8 @@
         ".githooks/**",
         ".github/**",
         "scripts/check_docs_sync.py",
-        "scripts/check_commit_message.py"
+        "scripts/check_commit_message.py",
+        "scripts/check_version_sync.py"
       ],
       "required_any": ["docs/developer-guide.md"]
     },
