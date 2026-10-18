@@ -20,6 +20,7 @@ class ErrorCode(str, Enum):
     LOG_IO_ERROR = "LOG_IO_ERROR"
     CONFIG_IO_ERROR = "CONFIG_IO_ERROR"
     FILE_TRANSFER_ERROR = "FILE_TRANSFER_ERROR"
+    UPDATE_CHECK_FAILED = "UPDATE_CHECK_FAILED"
     INTERNAL_ERROR = "INTERNAL_ERROR"
 
 
@@ -202,6 +203,15 @@ class FileTransferError(DomainError):
     recoverable = True
     default_message = "文件传输失败。"
     default_suggestion = "请确认设备已进入 Ymodem 接收模式，并检查串口参数和文件是否可读。"
+
+
+class UpdateCheckError(DomainError):
+    """无法获取或解析最新版本信息。"""
+
+    code = ErrorCode.UPDATE_CHECK_FAILED
+    recoverable = True
+    default_message = "检查更新失败。"
+    default_suggestion = "请检查网络连接后重试。"
 
 
 class InternalError(DomainError):

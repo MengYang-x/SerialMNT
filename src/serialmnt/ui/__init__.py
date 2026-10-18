@@ -10,6 +10,7 @@ from .receive_panel import ReceivePanel
 from .send_panel import SendPanel
 from .session_tab import SessionTab
 from .theme_manager import DataColors, apply_theme, data_colors, resolve_theme, resolved_theme
+from .update_check import UpdateCheckRunner, is_allowed_release_url
 
 __all__ = [
     "ConnectionPanel",
@@ -22,8 +23,10 @@ __all__ = [
     "ReceivePanel",
     "SendPanel",
     "SessionTab",
+    "UpdateCheckRunner",
     "apply_theme",
     "data_colors",
+    "is_allowed_release_url",
     "resolve_theme",
     "resolved_theme",
 ]

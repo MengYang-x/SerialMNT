@@ -3,11 +3,12 @@
 from collections.abc import Callable
 from dataclasses import replace
 
-from PySide6.QtCore import QByteArray, QEvent, QObject, QPoint, Qt, QTimer
+from PySide6.QtCore import QByteArray, QEvent, QObject, QPoint, Qt, QTimer, QUrl
 from PySide6.QtGui import (
     QAction,
     QCloseEvent,
     QContextMenuEvent,
+    QDesktopServices,
     QKeySequence,
     QMouseEvent,
     QResizeEvent,
@@ -23,6 +24,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMenu,
     QMessageBox,
+    QPushButton,
     QTabBar,
     QTabWidget,
     QToolButton,
@@ -30,7 +32,13 @@ from PySide6.QtWidgets import (
 )
 
 from serialmnt import __version__
-from serialmnt.application import MAX_SESSION_TITLE_LENGTH, SessionManager
+from serialmnt.application import (
+    MAX_SESSION_TITLE_LENGTH,
+    SessionManager,
+    UpdateCheckResult,
+    UpdateService,
+    UpdateStatus,
+)
 from serialmnt.domain import (
     AppConfig,
     ConfigIOError,
@@ -52,6 +60,7 @@ from serialmnt.ui.theme_manager import (
     apply_theme,
     data_font,
 )
+from serialmnt.ui.update_check import UpdateCheckRunner, is_allowed_release_url
 
 _THEMES: tuple[tuple[str, Theme], ...] = (
     ("跟随系统", "system"),
@@ -117,6 +126,9 @@ class MainWindow(QMainWindow):
         self._config_store = config_store
         self._last_saved: AppConfig | None = None
         self._session_counter = 0
+        self._update_check_manual = False
+        self._is_closing = False
+        self._update_runner: UpdateCheckRunner | None = None
         self._theme: Theme = initial_config.theme if initial_config is not None else "system"
         self._data_font_size = initial_config.data_font_size if initial_config is not None else 0
         self._sidebar_visible = initial_config.sidebar_visible if initial_config else True
@@ -150,6 +162,10 @@ class MainWindow(QMainWindow):
         self._build_actions()
         self._restore_or_create_sessions(initial_config)
         self._center_on_primary_screen()
+        self._update_timer = QTimer(self)
+        self._update_timer.setSingleShot(True)
+        self._update_timer.setInterval(3000)
+        self._update_timer.timeout.connect(self._auto_check_updates)
 
     def _build_actions(self) -> None:
         new_action = QAction("新建会话", self)
@@ -168,12 +184,17 @@ class MainWindow(QMainWindow):
         self.help_action.setShortcut(QKeySequence("F1"))
         self.help_action.triggered.connect(self._show_help)
 
+        self.check_update_action = QAction("检查更新", self)
+        self.check_update_action.setEnabled(False)
+        self.check_update_action.triggered.connect(self._manual_check_updates)
+
         self.main_menu = QMenu(self)
         self.main_menu.addAction(new_action)
         self.main_menu.addAction(close_action)
         self.main_menu.addMenu(self.font_menu)
         self.main_menu.addSeparator()
         self.main_menu.addAction(self.help_action)
+        self.main_menu.addAction(self.check_update_action)
         self.main_menu.addSeparator()
         self.main_menu.addAction(exit_action)
         for action in (
@@ -191,7 +212,7 @@ class MainWindow(QMainWindow):
         self.menu_button = QToolButton()
         self.menu_button.setText("☰")
         self.menu_button.setAutoRaise(True)
-        self.menu_button.setToolTip("新建会话 / 关闭当前会话 / 字号 / 使用帮助 / 退出")
+        self.menu_button.setToolTip("新建会话 / 关闭当前会话 / 字号 / 使用帮助 / 检查更新 / 退出")
         self.menu_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.menu_button.setMenu(self.main_menu)
 
@@ -264,6 +285,91 @@ class MainWindow(QMainWindow):
         self._help_window.show()
         self._help_window.raise_()
         self._help_window.activateWindow()
+
+    def configure_update_service(self, service: UpdateService | None) -> None:
+        """由组合根注入更新服务并启动一次启动检查。
+
+        未配置服务时“检查更新”菜单项保持禁用，测试和纯 UI 构造不会访问
+        网络；重复配置不会创建第二个检查任务。
+        """
+        if service is None or self._update_runner is not None:
+            return
+        self._update_runner = UpdateCheckRunner(service, self)
+        self._update_runner.finished.connect(self._on_update_checked)
+        self.check_update_action.setEnabled(True)
+        self._update_timer.start()
+
+    def _auto_check_updates(self) -> None:
+        """启动后的静默检查，无更新或失败时不打扰用户。"""
+        self._start_update_check(manual=False)
+
+    def _manual_check_updates(self, _checked: bool = False) -> None:
+        """☰ 菜单入口，结果需要在状态栏明确反馈。"""
+        self._start_update_check(manual=True)
+
+    def _start_update_check(self, *, manual: bool) -> None:
+        if self._update_runner is None:
+            return
+        if manual:
+            # 手动检查优先接管正在进行的启动检查，其结果也按手动检查反馈。
+            self._update_timer.stop()
+            self._update_check_manual = True
+            self.check_update_action.setEnabled(False)
+            self.statusBar().showMessage("正在检查更新…")
+        if not self._update_runner.start() and not manual:
+            return
+
+    def _on_update_checked(self, result: UpdateCheckResult) -> None:
+        if self._is_closing:
+            return
+        manual = self._update_check_manual
+        self._update_check_manual = False
+        self.check_update_action.setEnabled(True)
+        if result.status is UpdateStatus.UPDATE_AVAILABLE and result.release is not None:
+            self._present_update(result)
+            return
+        if not manual:
+            return
+        if result.status is UpdateStatus.UP_TO_DATE:
+            self.statusBar().showMessage(f"当前已是最新版本 {result.current_version}", 5000)
+        else:
+            self.statusBar().showMessage("检查更新失败，请检查网络后重试。", 5000)
+
+    def _build_update_dialog(self, result: UpdateCheckResult) -> tuple[QMessageBox, QPushButton]:
+        """构造新版本对话框，供展示和测试分别使用。"""
+        release = result.release
+        if release is None:
+            raise ValueError("发现新版本时必须提供发布信息。")
+        box = QMessageBox(self)
+        box.setWindowTitle("发现新版本")
+        box.setIcon(QMessageBox.Icon.Information)
+        # 更新说明来自外部服务，禁止按富文本解析或加载远程图片。
+        box.setTextFormat(Qt.TextFormat.PlainText)
+        box.setText(f"当前版本：{result.current_version}\n最新版本：{release.version}")
+        if release.published_at is not None:
+            published = release.published_at.astimezone().strftime("%Y-%m-%d")
+            box.setInformativeText(f"发布时间：{published}")
+        if release.notes.strip():
+            box.setDetailedText(release.notes)
+        download_button = box.addButton("前往下载", QMessageBox.ButtonRole.AcceptRole)
+        later_button = box.addButton("稍后", QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(later_button)
+        box.setEscapeButton(later_button)
+        return box, download_button
+
+    def _present_update(self, result: UpdateCheckResult) -> None:
+        box, download_button = self._build_update_dialog(result)
+        box.exec()
+        if box.clickedButton() is download_button and result.release is not None:
+            self._open_release_page(result.release.release_url)
+
+    def _open_release_page(self, url: str) -> None:
+        """只把受信任的 GitHub HTTPS 页面交给系统浏览器。"""
+        if not is_allowed_release_url(url):
+            QMessageBox.warning(self, "无法打开下载页", f"下载地址不受支持：\n{url}")
+            return
+        if not QDesktopServices.openUrl(QUrl(url)):
+            QMessageBox.information(self, "无法打开下载页", f"请手动访问：\n{url}")
 
     def _center_on_primary_screen(self) -> None:
         """启动时把普通窗口放到主屏可用区域的中央。
@@ -549,6 +655,8 @@ class MainWindow(QMainWindow):
                     event.ignore()
                     return
                 break
+        self._is_closing = True
+        self._update_timer.stop()
         self._save_timer.stop()
         self._save_config()
         self._session_manager.close_all(force=True)

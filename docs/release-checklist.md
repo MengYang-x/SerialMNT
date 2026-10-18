@@ -16,6 +16,7 @@
 - [x] `ruff format --check .` 通过。
 - [x] `ruff check .` 通过。
 - [x] `pytest` 通过。
+- [ ] 更新检查相关单元和 UI 测试通过，测试使用 Fake 源且不访问真实网络。
 - [x] domain 分支覆盖率不低于 90%。
 - [x] application 分支覆盖率不低于 90%。
 - [x] 标准 wheel 和 sdist 构建成功。
@@ -42,5 +43,9 @@
 
 - [ ] Windows 单文件和 SHA-256 已生成。
 - [ ] Linux 单文件和 SHA-256 已生成。
+- [ ] 已创建 `vX.Y.Z` tag 和 GitHub Release（非草稿、非预发布），正文与用户手册版本记录一致。
+- [ ] Windows/Linux 单文件和 SHA-256 已上传到对应 GitHub Release。
+- [ ] `/releases/latest` 返回当前版本；旧版本启动能看到更新提示，当前版本启动无提示。
+- [ ] 断网启动时更新检查静默失败且串口功能正常；手动检查显示失败提示。
 - [x] 发布说明列出已知限制。
 - [x] 发布说明注明 Windows/Linux 必须分别构建。

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 from .models import AppConfig, LogRecord, SerialConfig
+from .updates import ReleaseInfo
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,4 +100,16 @@ class LogSink(Protocol):
 
     def close(self) -> None:
         """关闭日志输出。"""
+        ...
+
+
+@runtime_checkable
+class ReleaseSource(Protocol):
+    """最新正式版本信息来源，允许阻塞调用。
+
+    实现不得在 UI 主线程执行；失败时抛出 ``UpdateCheckError``。
+    """
+
+    def fetch_latest(self) -> ReleaseInfo:
+        """返回最新正式版本信息。"""
         ...

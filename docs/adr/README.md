@@ -14,3 +14,4 @@ ADR 至少包含背景、候选方案、决策、后果和状态。已被替代�
 
 - [ADR-0001：Worker 线程和会话边界](0001-worker-threading-and-session-boundaries.md)
 - [ADR-0002：Ymodem 文件发送的线程与状态模型](0002-ymodem-file-send.md)
+- [ADR-0003：启动更新检查与 GitHub Releases 数据源](0003-update-check.md)

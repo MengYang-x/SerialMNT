@@ -45,7 +45,7 @@ build = [
 [project.scripts]
 serialmnt = "serialmnt.bootstrap.app:main"
 [project.urls]
-Repository = "https://github.com/Queqiongtao/SerialMNT"
+Repository = "https://github.com/MengYang-x/SerialMNT"
 
 [tool.setuptools]
 include-package-data = true

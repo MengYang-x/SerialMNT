@@ -25,6 +25,7 @@ from .errors import (
     SendQueueFullError,
     TextEncodingError,
     TransportIOError,
+    UpdateCheckError,
     UserFacingError,
     ValidationError,
 )
@@ -36,7 +37,15 @@ from .models import (
     SessionPreferences,
     SessionSnapshot,
 )
-from .ports import Clock, ConfigStore, LogSink, PortInfo, PortScanner, Transport
+from .ports import (
+    Clock,
+    ConfigStore,
+    LogSink,
+    PortInfo,
+    PortScanner,
+    ReleaseSource,
+    Transport,
+)
 from .state_machine import SessionStateMachine
 from .states import ACTIVE_FILE_TRANSFER_STATES, FileTransferState, SessionState
 from .terminal import TerminalCell, TerminalScreen, TerminalStyle
@@ -52,6 +61,7 @@ from .types import (
     Theme,
     ViewMode,
 )
+from .updates import ReleaseInfo, is_newer_version, normalize_version, parse_version
 
 __all__ = [
     "ACTIVE_FILE_TRANSFER_STATES",
@@ -88,6 +98,8 @@ __all__ = [
     "PortPermissionError",
     "PortScanner",
     "RecordBuffer",
+    "ReleaseInfo",
+    "ReleaseSource",
     "SendQueueFullError",
     "SerialConfig",
     "SessionPreferences",
@@ -101,6 +113,7 @@ __all__ = [
     "Theme",
     "Transport",
     "TransportIOError",
+    "UpdateCheckError",
     "UserFacingError",
     "ValidationError",
     "ViewMode",
@@ -108,5 +121,8 @@ __all__ = [
     "decode_text",
     "encode_text",
     "format_hex",
+    "is_newer_version",
+    "normalize_version",
     "parse_hex",
+    "parse_version",
 ]

@@ -10,6 +10,7 @@ from .session_controller import (
     SnapshotCallback,
 )
 from .session_manager import SessionManager
+from .update_service import UpdateCheckResult, UpdateService, UpdateStatus
 from .ymodem import YmodemOptions, YmodemSender, sanitize_ymodem_name
 
 __all__ = [
@@ -22,6 +23,9 @@ __all__ = [
     "SessionControllerOptions",
     "SessionManager",
     "SnapshotCallback",
+    "UpdateCheckResult",
+    "UpdateService",
+    "UpdateStatus",
     "WorkerEventHandler",
     "YmodemOptions",
     "YmodemSender",

@@ -74,8 +74,20 @@ Windows 单文件目标机器无需安装 Python。Linux 单文件仍依赖常�
 
 - 首次启动会解压到系统临时目录，启动速度慢于普通源码运行。
 - 临时目录不可执行或磁盘空间不足时可能无法启动。
-- 程序不包含自动更新、代码签名和遥测功能。
+- 程序不包含自动下载或自动替换式更新、代码签名和遥测功能；启动更新检查只查询 GitHub Releases 并提示新版本。
 - 发布时必须同时提供对应的 SHA-256 校验值。
+
+## GitHub Release 与更新检查
+
+更新检查读取 `https://api.github.com/repos/MengYang-x/SerialMNT/releases/latest`。每次正式发布必须：
+
+1. 确认 `src/serialmnt/__init__.py` 的 `__version__`、三处文档版本头和用户手册版本记录一致，并运行 `scripts/check_version_sync.py`。
+2. 创建 `vMAJOR.MINOR.PATCH` 注释 tag。
+3. 以该 tag 创建 GitHub Release，标题使用 `SerialMNT X.Y.Z`，正文填写用户可见变更；Release 不得保存为草稿或标记为预发布。
+4. 上传 Windows/Linux 单文件和对应 SHA-256 文件。
+5. 访问 `/releases/latest` 确认返回该版本；用旧版本启动确认出现更新提示，用当前版本启动并手动检查确认“已是最新”。
+
+没有正式 Release 时，更新检查会静默跳过，不影响串口功能。
 
 ## 图标与样式资源
 

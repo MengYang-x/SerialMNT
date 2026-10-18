@@ -1,7 +1,7 @@
 # SerialMNT 当前实现开发指南
 
 > 文档版本：1.0  
-> 软件版本：0.2.3  
+> 软件版本：0.3.0  
 > 对应基线提交：`cb6c23a`  
 > 更新时间：2026-10-18  
 > 适用读者：维护者、测试人员和参与扩展的开发者
@@ -33,6 +33,8 @@ bootstrap -> ui -> application -> domain
 - `infrastructure` 实现 `Transport`、`PortScanner`、`ConfigStore`、`LogSink` 和 `Clock` 协议。
 - `ui` 依赖 PySide6 与 application 控制器，通过不可变快照和记录更新界面。
 - `bootstrap` 组装真实对象并启动 Qt 应用。
+
+更新检查沿用同一依赖方向：`domain` 负责版本比较和 `ReleaseInfo`，`application` 负责 `UpdateService`，`infrastructure` 负责 GitHub API 读取，`ui` 负责线程池调度和结果展示。
 
 不能把串口 I/O、文件 I/O 或 Qt 类型放入 domain；也不能让 infrastructure 反向依赖 UI。
 
@@ -85,6 +87,7 @@ bootstrap -> ui -> application -> domain
 - `Clock`：返回带时区 UTC 时间和单调时钟。
 - `ConfigStore`：加载和保存应用配置。
 - `LogSink`：打开、写入、刷新和关闭日志。
+- `ReleaseSource`：返回最新正式版本 `ReleaseInfo`，允许阻塞，失败时抛出 `UpdateCheckError`。
 
 测试使用 Fake 实现替换这些协议，不依赖真实硬件。
 
@@ -98,6 +101,14 @@ bootstrap -> ui -> application -> domain
 - EOT 允许接收端先 NAK 再 ACK 或直接 ACK；EOT 确认后短等 `C` 并发送全零结束空块，结束空块未确认不回滚已全部确认的文件。
 - 用户取消、Worker 停止、重试耗尽、接收端双 CAN、文件读取失败和传输 I/O 错误都会终止传输；取消或失败时尽力发送 8 个 CAN 字节。
 - 传输期间协议字节由引擎消费，不进入接收缓冲、CSV/TXT 日志和 TX/RX 计数；只向界面发布不可变进度快照和开始/终态 `SYSTEM` 记录。
+
+### 3.6 版本与更新检查模型
+
+- `domain/updates.py` 提供 `parse_version()`、`normalize_version()`、`is_newer_version()` 和 `ReleaseInfo`；版本按三段整数比较，允许 Release tag 带一个 `v` 前缀。
+- `UpdateService` 通过 `ReleaseSource.fetch_latest()` 获取最新正式版本，返回 `UpdateCheckResult`（`update_available`、`up_to_date` 或 `failed`）。可预期的 `UpdateCheckError` 转为失败结果，未预期异常由 UI 任务边界兜底。
+- `GithubReleaseSource` 使用标准库 `urllib.request` 访问 `https://api.github.com/repos/MengYang-x/SerialMNT/releases/latest`，超时 5 秒，响应上限 256 KiB。只接受 HTTPS 和 HTTP 200；404、403、超时、网络错误和格式错误都转为 `UpdateCheckError`。
+- 请求只带 `User-Agent: SerialMNT/<version>`、`Accept: application/vnd.github+json` 和 `X-GitHub-Api-Version: 2022-11-28`，不发送查询参数、Cookie、令牌、设备信息或唯一标识。
+- 更新检查不修改 `AppConfig` schema，不下载、不执行、不修改任何程序文件。
 
 ## 4. 会话状态机
 
@@ -134,6 +145,7 @@ disconnected -> connecting -> connected -> disconnecting -> disconnected
 - `SessionController` 和 `SessionManager` 使用 `RLock` 保护共享状态。
 - Worker 通过 `WorkerEventHandler` 回调 controller；UI 由 `QtSessionBridge` 把回调转换为 Qt 信号，并以 queued connection 投递到主线程。
 - 控件不得读取 Worker 内部状态，只能读取 controller 的不可变快照或缓冲副本。
+- 更新检查由 `ui/update_check.py` 的 `UpdateCheckRunner` 在独立 `QThreadPool` 中执行一次同步请求，HTTP 请求超时 5 秒；同一时刻只允许一个任务，结果经 queued signal 返回主线程。
 
 ## 6. 关键数据流
 
@@ -179,6 +191,14 @@ disconnected -> connecting -> connected -> disconnecting -> disconnected
 4. 超时则进入 `error` 并记录“等待串口线程退出超时”。
 5. 关闭标签或退出程序时使用 `force=True`；退出前 Qt 主线程会等待 Worker 清理。
 
+### 6.6 更新检查
+
+1. `bootstrap.main()` 创建 `UpdateService(GithubReleaseSource(), current_version=__version__)`，`build_main_window()` 通过 `configure_update_service()` 注入；测试不传服务，不访问网络。
+2. `MainWindow` 显示后约 3 秒触发一次静默检查；☰ 菜单“检查更新”触发手动检查。手动检查会接管正在进行的启动检查并优先反馈结果。
+3. `UpdateCheckRunner` 在线程池中调用 `UpdateService.check()`，结果通过 queued signal 回到主线程。
+4. 有新版本时弹窗显示当前/最新版本和纯文本更新说明；“前往下载”只打开 HTTPS 的 `github.com` 页面，不下载或执行任何文件。
+5. 启动检查无更新或失败时静默；手动检查在状态栏显示“已是最新”或“检查失败”，消息 5 秒后消失。
+
 ## 7. 缓冲、配置与日志实现
 
 ### 7.1 内存缓冲
@@ -213,6 +233,7 @@ CSV 输出使用 `utf-8-sig` 和 RFC 4180 字段：`timestamp`、`direction`、`
 ## 8. UI 层职责
 
 - `MainWindow`：单行头部，不创建 `QMenuBar` 与 `QToolBar`；标签栏右上角角落控件依次承载“主题”下拉框、“字号”下拉框（两者高 `CONTROL_HEIGHT_PX`）和“☰”菜单（新建会话/关闭当前会话/使用帮助/退出），菜单动作额外用 `addAction()` 挂到窗口以保留 `Ctrl+T/W/Q`；“+”新建按钮由 `_SessionTabBar` 承载——它是 `QTabBar` 子类，在 `__init__` 里经 `setTabBar()` 装入（必须先换标签栏再设置 `setTabsClosable()`/`setMovable()`，这两个属性不会随 `setTabBar()` 带到新标签栏），把按钮作为标签栏子控件贴在最后一个标签右边缘之后，并在 `tabLayoutChange()`（标签增删、改名）与 `resizeEvent()` 后重新定位，拖动标签只改变顺序、不改变各标签宽度之和，因此无需额外挂钩，按钮放不下时（标签溢出滚动、窗口过窄）隐藏，新建会话改走 ☰ 菜单或 `Ctrl+T`；标签栏通过事件过滤器处理双击重命名与右键菜单（重命名…/关闭当前会话/新建会话），菜单动作作用于被点击的标签，右键坐标取 `QContextMenuEvent.pos()/globalPos()`（该类没有 `position()`/`globalPosition()`），重命名对话框用 `dialog.findChild(QLineEdit)` 设置长度上限（`QInputDialog.lineEdit()` 在 PySide6 未暴露），弹菜单与弹对话框分别抽成 `_show_tab_menu()`/`_ask_session_title()` 便于测试替换；负责标签、窗口状态与配置保存（内容未变化时跳过写盘），窗口最小尺寸 900×600，启动时把普通窗口居中到主屏可用区域（恢复的几何只保留尺寸，最大化/全屏状态不覆盖；窗口大于可用区域时贴住左上角），主题变化后对每个 `SessionTab` 重新应用数据区字号并调用 `refresh_theme()`。
+- 更新检查入口：☰ 菜单“检查更新”仅在 `update_service` 已配置时启用；`configure_update_service()` 创建 `UpdateCheckRunner` 并启动 3 秒单次定时器。新版本对话框使用纯文本格式显示版本号，更新说明放在详情区；“前往下载”经 `is_allowed_release_url()` 校验 HTTPS 与 GitHub 主机后交给 `QDesktopServices.openUrl()`。
 - `HelpWindow`：由 ☰ 菜单“使用帮助”（`F1`）打开的非模态帮助窗口，左侧 `QListWidget` 目录、右侧只读 `QTextBrowser` 正文，中间用 `QSplitter` 分隔；正文由 `setMarkdown()` 渲染随包分发的 `ui/assets/user-guide.md`（与 `docs/user-guide.md` 逐字节一致，由单元测试守卫），目录取 `headingLevel() == 2` 的标题块并用 `block.position()` 记录位置，选中目录项时把 `QTextCursor` 移到该位置后 `ensureCursorVisible()`；资源缺失时只显示一行降级提示而不抛错；`MainWindow._show_help()` 懒创建并复用单实例。
 - `SessionTab`：用水平 `QSplitter` 组合左侧设置面板和右侧收发区；设置面板是 `QScrollArea`，内容控件挂在 `sidebar_content` 上并顶部对齐（末尾 `addStretch(1)`，多余高度留在滚动区背景而不是分组框内部），接收标题行最左侧是侧栏折叠按钮，右侧依次是“发送设置”（按下文 `fold_rank` 参与溢出折叠）和“终端/分栏”；终端视图隐藏 `SendPanel`、收起垂直分隔条，接收区末尾使用原始流内联输入；切回分栏恢复原比例，视图模式随标签持久化，底部状态条由 `state_indicator` 色点和 `status_label` 组成；快照标题变化时发出 `title_changed(str)`，由窗口据此刷新标签文本与 tooltip。
 - 分组框内边距：`ConnectionPanel`、`FileTransferPanel` 和 `LogPanel` 的布局外边距均设为 0，内边距统一由 QSS `QGroupBox` 的 `padding` 提供；否则 Qt 默认布局外边距会与 QSS 内边距叠加 9 px，三个分组的左边缘也会错位。
@@ -243,6 +264,7 @@ CSV 输出使用 `utf-8-sig` 和 RFC 4180 字段：`timestamp`、`direction`、`
 - 端口不存在、占用、权限不足和传输 I/O 错误。
 - 日志与配置文件 I/O 错误。
 - Ymodem 传输错误（`FILE_TRANSFER_ERROR`）：文件不可读、文件名过长、串口参数不兼容、重试耗尽、对端取消和传输忙。协议失败不写入 `SessionSnapshot.last_error`，只体现在 `FileTransferSnapshot` 和 `SYSTEM` 记录中，串口连接保持可用；真实 `TransportIOError` 仍走既有致命错误和断开路径。
+- 更新检查错误（`UPDATE_CHECK_FAILED`）：网络不可达、超时、限流或响应格式非法；启动时静默，手动检查在状态栏提示检查失败。
 - 未预期内部错误。
 
 底层 `pyserial` 异常在 `SerialTransport` 边界映射为领域错误；UI 不显示未处理的 traceback。

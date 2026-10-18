@@ -1,6 +1,7 @@
 """串口、配置和日志的具体基础设施实现。"""
 
 from .csv_log_sink import CsvLogSink
+from .github_release_source import GithubReleaseSource
 from .json_config_store import JsonConfigStore, default_config_path
 from .port_scanner import SerialPortScanner
 from .serial_transport import SerialFactory, SerialTransport
@@ -9,6 +10,7 @@ from .txt_log_sink import TxtLogSink
 
 __all__ = [
     "CsvLogSink",
+    "GithubReleaseSource",
     "JsonConfigStore",
     "SerialFactory",
     "SerialPortScanner",
