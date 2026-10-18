@@ -1656,7 +1656,7 @@ def test_new_session_button_hidden_when_tabs_do_not_fit(qtbot: object) -> None:
     while window.tabs.count() > 1:
         window._close_tab(window.tabs.count() - 1)
 
-    qtbot.waitUntil(lambda: window.new_tab_button.isVisible(), timeout=2000)
+    qtbot.waitUntil(window.new_tab_button.isVisible, timeout=2000)
     assert window.new_tab_button.geometry().left() == bar.tabRect(0).right() + 1
     window.close()
 
