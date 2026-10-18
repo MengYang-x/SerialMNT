@@ -1,7 +1,7 @@
 # SerialMNT 工程代理规范
 
-> 文档版本：1.3  
-> 更新时间：2026-10-18 12:00:27 CST（星期日）  
+> 文档版本：1.4  
+> 更新时间：2026-10-18 18:30:08 CST（星期日）  
 > 适用范围：SerialMNT 全工程  
 > 文件用途：约束代理和开发者在仓库内的工作方式
 
@@ -53,8 +53,9 @@
   2. `docs/README.md`、`docs/user-guide.md`、`docs/developer-guide.md` 的“软件版本”头。
   3. `docs/user-guide.md` 第 10 章“软件版本”：新版本条目放在最上方，格式为 `- Vx.y.z`，下一行写 `更新时间：YYYY-MM-DD`，再下方用缩进列表写中文变更内容，只记录用户可感知的新增、修复、变更和兼容性影响。
   4. `src/serialmnt/ui/assets/user-guide.md` 与 `docs/user-guide.md` 逐字节同步。
+- 文档自身版本独立于软件版本：`AGENT.md` 和 `docs/` 下带有 `> 文档版本：MAJOR.MINOR` 头的文档，每次内容修改都必须递增该版本（例如 `1.0 → 1.1`、`1.9 → 1.10`），并把“更新时间”改为实际修改日期；同一天内多次修改可保持相同日期。
 - 发布正式版本时，另建 `docs/release-notes-<version>.md` 并更新发布清单；日常递增不强制新建发布说明文件。
-- 提交前运行 `python scripts/check_version_sync.py`；CI 会执行同一检查。纯测试变更可豁免版本号，但必须在提交说明中注明豁免理由。
+- 提交前运行 `python scripts/check_version_sync.py` 和 `python scripts/check_docs_sync.py --staged`；CI 会执行同一检查。`check_docs_sync.py` 会拒绝文档内容已修改但文档版本未递增的变更；新文档首次建立版本头时不受此限制。纯测试变更可豁免版本号，但必须在提交说明中注明豁免理由。
 
 ## 3. 工程基线
 

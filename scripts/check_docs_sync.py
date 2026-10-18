@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import json
+import re
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -14,6 +15,8 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 RULE_FILE = ROOT / "docs" / "doc-sync-rules.json"
+DOCUMENT_VERSION_PATTERN = re.compile(r"^> 文档版本：\s*(\d+\.\d+)\s*$", re.MULTILINE)
+DOCUMENT_PATTERNS = ("AGENT.md", "docs/**/*.md")
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,7 +141,84 @@ def find_sync_issues(
     return issues
 
 
-def _run_git(*arguments: str) -> set[str]:
+def _document_version(text: str | None) -> str | None:
+    """从文档头部提取 ``MAJOR.MINOR`` 形式的文档版本。"""
+    if text is None:
+        return None
+    match = DOCUMENT_VERSION_PATTERN.search(text)
+    return match.group(1) if match is not None else None
+
+
+def _version_key(version: str) -> tuple[int, int]:
+    major, minor = version.split(".", 1)
+    return int(major), int(minor)
+
+
+def find_document_version_issues(
+    current_texts: dict[str, str],
+    base_texts: dict[str, str | None],
+) -> list[str]:
+    """返回文档版本未递增的问题列表。
+
+    只约束原本已有文档版本头的文档；新文档首次引入版本头时只需给出初始版本。
+    """
+    issues: list[str] = []
+    for path in sorted(current_texts):
+        base_version = _document_version(base_texts.get(path))
+        if base_version is None:
+            continue
+        current_version = _document_version(current_texts[path])
+        if current_version is None:
+            issues.append(f"{path} 缺少“> 文档版本：MAJOR.MINOR”头。")
+            continue
+        if _version_key(current_version) <= _version_key(base_version):
+            issues.append(
+                f"{path} 的文档版本未递增：{base_version} → {current_version}；"
+                "修改文档时必须递增文档版本。"
+            )
+    return issues
+
+
+def _read_working_tree_text(path: str) -> str | None:
+    try:
+        return (ROOT / path).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
+def _read_git_text(ref: str, path: str) -> str | None:
+    completed = subprocess.run(
+        ["git", "-C", str(ROOT), "show", f"{ref}:{path}"],
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    return completed.stdout if completed.returncode == 0 else None
+
+
+def find_changed_document_version_issues(
+    changed_paths: set[str],
+    base_ref: str,
+    content_ref: str | None = None,
+) -> list[str]:
+    """检查本次变更中的文档是否递增了文档版本。"""
+    selected = {path for path in changed_paths if _matches_any(path, DOCUMENT_PATTERNS)}
+    current_texts: dict[str, str] = {}
+    base_texts: dict[str, str | None] = {}
+    for path in selected:
+        current = (
+            _read_git_text(content_ref, path)
+            if content_ref is not None
+            else _read_working_tree_text(path)
+        )
+        if current is not None:
+            current_texts[path] = current
+        base_texts[path] = _read_git_text(base_ref, path)
+    return find_document_version_issues(current_texts, base_texts)
+
+
+def _run_git_text(*arguments: str) -> str:
     command = ["git", "-C", str(ROOT), *arguments]
     completed = subprocess.run(
         command,
@@ -150,9 +230,23 @@ def _run_git(*arguments: str) -> set[str]:
     if completed.returncode != 0:
         detail = completed.stderr.strip() or completed.stdout.strip() or "未知 Git 错误"
         raise RuntimeError(f"Git 命令失败：{' '.join(command)}\n{detail}")
+    return completed.stdout
+
+
+def _run_git(*arguments: str) -> set[str]:
     return {
-        line.strip().replace("\\", "/") for line in completed.stdout.splitlines() if line.strip()
+        line.strip().replace("\\", "/")
+        for line in _run_git_text(*arguments).splitlines()
+        if line.strip()
     }
+
+
+def _merge_base(ref: str) -> str:
+    """返回给定引用与 HEAD 的共同祖先，作为变更范围比较基线。"""
+    base = _run_git_text("merge-base", ref, "HEAD").strip()
+    if not base:
+        raise RuntimeError(f"无法确定 {ref} 与 HEAD 的共同祖先。")
+    return base
 
 
 def changed_paths(mode: str, base: str | None = None) -> set[str]:
@@ -201,6 +295,11 @@ def main(argv: list[str] | None = None) -> int:
             base = arguments.base
         paths = changed_paths(mode, base)
         problems.extend(find_sync_issues(paths, rules, unmapped_fail))
+        if base is not None:
+            problems.extend(find_changed_document_version_issues(paths, _merge_base(base), "HEAD"))
+        else:
+            content_ref = ":0" if mode == "staged" else None
+            problems.extend(find_changed_document_version_issues(paths, "HEAD", content_ref))
     except (RuntimeError, ValueError) as exc:
         print(f"[doc-sync] 配置或 Git 检查失败：{exc}", file=sys.stderr)
         return 2

@@ -1,4 +1,4 @@
-"""校验版本号、文档版本头和用户手册版本记录是否同步。"""
+"""校验软件版本号、三处文档的“软件版本”头和用户手册版本记录是否同步。"""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ def read_version(root: Path) -> str:
 
 
 def find_version_issues(root: Path) -> list[str]:
-    """返回版本号、文档版本头、版本记录和随包手册之间的所有不一致。"""
+    """返回软件版本号、三处文档的“软件版本”头、版本记录和随包手册之间的所有不一致。"""
     try:
         version = read_version(root)
     except (OSError, ValueError) as exc:

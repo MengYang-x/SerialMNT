@@ -1,7 +1,7 @@
 # SerialMNT 文档索引
 
-> 文档版本：1.1  
-> 软件版本：0.7.0  
+> 文档版本：1.2  
+> 软件版本：0.7.1  
 > 对应基线提交：`cb6c23a`  
 > 更新时间：2026-10-18
 
@@ -55,6 +55,6 @@ git config core.hooksPath .githooks
 .\.venv\Scripts\python.exe scripts\check_commit_message.py --base origin/main
 ```
 
-版本号规则见 `AGENT.md` §2.4：版本号唯一来源是 `src/serialmnt/__init__.py`，改变运行行为时同步更新三处文档版本头和 `user-guide.md` 第 10 章“软件版本”；`check_version_sync.py` 校验这些位置与随包手册是否一致。
+版本号规则见 `AGENT.md` §2.4：版本号唯一来源是 `src/serialmnt/__init__.py`，改变运行行为时同步更新三处文档的“软件版本”头和 `user-guide.md` 第 10 章“软件版本”；`check_version_sync.py` 校验这些位置与随包手册是否一致。带 `> 文档版本：` 头的文档每次修改都必须递增该版本，`check_docs_sync.py` 会在文档内容变化而版本未递增时报错。
 
 GitHub Actions 会在 push 和 pull request 上再次执行文档同步、版本同步、提交信息中文校验、Ruff 和 pytest。机器检查只能保证相关文档被纳入同一变更、版本号同步且提交信息包含中文，内容准确性仍需代码审查确认。

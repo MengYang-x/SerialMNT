@@ -81,6 +81,16 @@ def test_help_renders_markdown_tables(qtbot: object) -> None:
         window.close()
 
 
+def test_help_links_open_in_external_browser(qtbot: object) -> None:
+    window, help_window = _open_help(qtbot)
+    try:
+        assert help_window.content.openExternalLinks()
+        html = help_window.content.document().toHtml()
+        assert 'href="https://github.com/MengYang-x"' in html
+    finally:
+        window.close()
+
+
 def test_help_content_stays_in_sync_with_docs() -> None:
     assert PACKAGED_GUIDE.read_bytes() == DOCS_GUIDE.read_bytes()
 

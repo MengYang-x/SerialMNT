@@ -1,7 +1,7 @@
 # SerialMNT 当前实现开发指南
 
-> 文档版本：1.0  
-> 软件版本：0.7.0  
+> 文档版本：1.2  
+> 软件版本：0.7.1  
 > 对应基线提交：`cb6c23a`  
 > 更新时间：2026-10-18  
 > 适用读者：维护者、测试人员和参与扩展的开发者
@@ -48,7 +48,7 @@ bootstrap -> ui -> application -> domain
 |---|---|---|
 | `port` | 空字符串 | 未连接时可为空，连接前必须非空 |
 | `baudrate` | `115200` | 正整数 |
-| `bytesize` | `8` | `5`、`6`、`7`、`8` |
+| `bytesize` | `8` | `5`、`6`、`7`、`8`；界面下拉框仅提供 `8` |
 | `parity` | `N` | `N`、`E`、`O`、`M`、`S` |
 | `stopbits` | `1.0` | `1`、`1.5`、`2` |
 | `flow_control` | `none` | `none`、`xonxoff`、`rtscts`、`dsrdtr` |
@@ -287,7 +287,7 @@ CSV 输出使用 `utf-8-sig` 和 RFC 4180 字段：`timestamp`、`direction`、`
 .\.venv\Scripts\python.exe -m pytest
 ```
 
-版本号与变更记录规则见 `AGENT.md` §2.4。`check_version_sync.py` 校验 `src/serialmnt/__init__.py` 的 `__version__`、三处文档版本头、`user-guide.md` 第 10 章条目以及随包手册副本是否一致；CI 和构建脚本都会执行该检查。
+版本号与变更记录规则见 `AGENT.md` §2.4。`check_version_sync.py` 校验 `src/serialmnt/__init__.py` 的 `__version__`、三处文档的“软件版本”头、`user-guide.md` 第 10 章条目以及随包手册副本是否一致；CI 和构建脚本都会执行该检查。修改带 `> 文档版本：` 头的文档时还必须递增其文档版本，`check_docs_sync.py` 会强制校验。
 
 启用本地 Hook（`pre-commit` 文档同步与 `commit-msg` 提交信息校验）：
 

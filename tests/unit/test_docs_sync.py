@@ -109,6 +109,44 @@ def test_rule_loader_and_targets_are_valid() -> None:
     assert checker.validate_rule_targets(ROOT, rules) == []
 
 
+def test_document_version_must_increase() -> None:
+    issues = checker.find_document_version_issues(
+        {"docs/user-guide.md": "> 文档版本：1.0  \n"},
+        {"docs/user-guide.md": "> 文档版本：1.0  \n"},
+    )
+
+    assert issues == [
+        "docs/user-guide.md 的文档版本未递增：1.0 → 1.0；修改文档时必须递增文档版本。"
+    ]
+
+
+def test_document_version_increment_passes() -> None:
+    issues = checker.find_document_version_issues(
+        {"docs/user-guide.md": "> 文档版本：1.10  \n"},
+        {"docs/user-guide.md": "> 文档版本：1.9  \n"},
+    )
+
+    assert issues == []
+
+
+def test_new_document_needs_no_previous_version() -> None:
+    issues = checker.find_document_version_issues(
+        {"docs/new-guide.md": "> 文档版本：1.0  \n"},
+        {},
+    )
+
+    assert issues == []
+
+
+def test_removed_document_version_header_is_reported() -> None:
+    issues = checker.find_document_version_issues(
+        {"docs/user-guide.md": "# 标题\n"},
+        {"docs/user-guide.md": "> 文档版本：1.0  \n"},
+    )
+
+    assert issues == ["docs/user-guide.md 缺少“> 文档版本：MAJOR.MINOR”头。"]
+
+
 def test_wildcard_document_target_is_found() -> None:
     rules = (
         checker.SyncRule(

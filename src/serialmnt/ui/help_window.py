@@ -50,7 +50,7 @@ class HelpWindow(QDialog):
         self.toc.setMinimumWidth(150)
         self.toc.setToolTip("章节目录")
         self.content = QTextBrowser()
-        self.content.setOpenExternalLinks(False)
+        self.content.setOpenExternalLinks(True)
         self.content.setToolTip("使用手册正文")
 
         splitter = QSplitter(Qt.Orientation.Horizontal)

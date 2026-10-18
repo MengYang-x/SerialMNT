@@ -2266,6 +2266,20 @@ def test_ask_session_title_uses_dialog_editor(qtbot: object, monkeypatch: object
         window.close()
 
 
+def test_connection_panel_only_offers_8_data_bits(qtbot: object) -> None:
+    transport = FakeTransport()
+    window = _window(qtbot, transport)
+    tab = _current_tab(window)
+    combo = tab.connection_panel.bytesize_combo
+
+    try:
+        assert [combo.itemData(index) for index in range(combo.count())] == [8]
+        assert combo.currentData() == 8
+        assert tab.connection_panel.build_config().bytesize == 8
+    finally:
+        window.close()
+
+
 def test_connection_panel_exposes_encoding_options(qtbot: object) -> None:
     transport = FakeTransport()
     window = _window(qtbot, transport)

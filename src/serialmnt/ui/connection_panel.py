@@ -133,8 +133,7 @@ class ConnectionPanel(QGroupBox):
         self.baud_combo.setEditable(True)
         self.baud_combo.addItems(_BAUDRATES)
         self.bytesize_combo = NoWheelComboBox()
-        for value in (5, 6, 7, 8):
-            self.bytesize_combo.addItem(str(value), value)
+        self.bytesize_combo.addItem("8", 8)
         self.parity_combo = NoWheelComboBox()
         for label, value in _PARITIES:
             self.parity_combo.addItem(label, value)
