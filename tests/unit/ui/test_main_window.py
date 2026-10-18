@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QToolBar,
     QToolButton,
+    QWidget,
 )
 from tests.fixtures.fakes import FakeClock, FakeTransport
 
@@ -187,6 +188,72 @@ def test_main_window_creates_multiple_independent_tabs(qtbot: object) -> None:
     assert second.controller.session_id != first.controller.session_id
     assert second.controller.state is not SessionState.CONNECTED
     assert second.send_panel.line_ending == DEFAULT_LINE_ENDING == "lf"
+    window.close()
+
+
+def _page_overlays(page: SessionTab) -> list[QWidget]:
+    """返回页面所在容器中的过渡覆盖层。"""
+    parent = page.parentWidget()
+    if parent is None:
+        return []
+    return [
+        child
+        for child in parent.children()
+        if isinstance(child, QWidget) and child.objectName() == "pageTransitionOverlay"
+    ]
+
+
+def test_new_session_cross_fades_to_new_page(qtbot: object) -> None:
+    transport = FakeTransport()
+    window = _window(qtbot, transport)
+
+    try:
+        second = window.new_session()
+
+        overlays = _page_overlays(second)
+        assert len(overlays) == 1
+        assert overlays[0].isVisible()
+        assert overlays[0].geometry() == second.geometry()
+        assert overlays[0].property("progress") == 1.0
+        qtbot.waitUntil(lambda: not _page_overlays(second), timeout=2000)
+    finally:
+        window.close()
+
+
+def test_switching_sessions_cross_fades_to_selected_page(qtbot: object) -> None:
+    transport = FakeTransport()
+    window = _window(qtbot, transport)
+    first = _current_tab(window)
+    second = window.new_session()
+    qtbot.waitUntil(lambda: not _page_overlays(second), timeout=2000)
+
+    window.tabs.setCurrentIndex(0)
+
+    assert len(_page_overlays(first)) == 1
+    assert first.graphicsEffect() is None
+    qtbot.waitUntil(lambda: not _page_overlays(first), timeout=2000)
+    assert second.graphicsEffect() is None
+    window.close()
+
+
+def test_neighbor_tab_switch_slides_in_tab_direction(
+    qtbot: object,
+    monkeypatch: object,
+) -> None:
+    transport = FakeTransport()
+    window = _window(qtbot, transport)
+    window.new_session()
+    directions: list[int] = []
+
+    def record(outgoing: object, incoming: object, *, direction: int = -1) -> None:
+        directions.append(direction)
+
+    monkeypatch.setattr(window._page_transition, "play", record)
+
+    window.tabs.setCurrentIndex(0)
+    window.tabs.setCurrentIndex(1)
+
+    assert directions == [-1, 1]
     window.close()
 
 

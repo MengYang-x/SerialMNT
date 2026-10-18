@@ -56,6 +56,7 @@ from serialmnt.ui.app_icon import app_icon
 from serialmnt.ui.help_window import HelpWindow
 from serialmnt.ui.log_level_settings import LogLevelRulesDialog
 from serialmnt.ui.no_wheel_combo import NoWheelComboBox
+from serialmnt.ui.page_transition import PageFadeTransition
 from serialmnt.ui.qt_bridge import QtSessionBridge
 from serialmnt.ui.session_tab import _SIDEBAR_DEFAULT_WIDTH, SessionTab
 from serialmnt.ui.theme_manager import (
@@ -164,6 +165,9 @@ class MainWindow(QMainWindow):
         self.tabs.setMovable(True)
         self.tabs.tabCloseRequested.connect(self._close_tab)
         self.setCentralWidget(self.tabs)
+        self._page_transition = PageFadeTransition(self)
+        self._current_page: QWidget | None = None
+        self.tabs.currentChanged.connect(self._fade_in_page)
         self.setWindowTitle(f"SerialMNT {__version__}")
         self.setWindowIcon(app_icon())
         self.resize(1180, 760)
@@ -430,6 +434,19 @@ class MainWindow(QMainWindow):
         会把它当成 ``preferences`` 传入并报错，因此在此显式吞掉该参数。
         """
         self.new_session()
+
+    def _fade_in_page(self, index: int) -> None:
+        """新建或切换会话时让旧页沿标签方向滑出；窗口未显示时保持硬切换。"""
+        page = self.tabs.widget(index)
+        previous = self._current_page
+        if page is previous:
+            return
+        previous_index = self.tabs.indexOf(previous) if previous is not None else -1
+        self._current_page = page
+        if page is not None and self.isVisible():
+            # 切到右侧标签时旧页向右滑出，切到左侧标签时向左滑出。
+            direction = 1 if index >= previous_index else -1
+            self._page_transition.play(previous, page, direction=direction)
 
     def _restore_or_create_sessions(self, config: AppConfig | None) -> None:
         app = QApplication.instance()

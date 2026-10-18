@@ -1,7 +1,7 @@
 # SerialMNT 当前实现开发指南
 
 > 文档版本：1.0  
-> 软件版本：0.6.1  
+> 软件版本：0.7.0  
 > 对应基线提交：`cb6c23a`  
 > 更新时间：2026-10-18  
 > 适用读者：维护者、测试人员和参与扩展的开发者
@@ -236,6 +236,7 @@ CSV 输出使用 `utf-8-sig` 和 RFC 4180 字段：`timestamp`、`direction`、`
 ## 8. UI 层职责
 
 - `MainWindow`：单行头部，不创建 `QMenuBar` 与 `QToolBar`；标签栏右上角角落控件依次承载“主题”下拉框、“字号”下拉框（两者高 `CONTROL_HEIGHT_PX`）和“☰”菜单（新建会话/关闭当前会话/字号/日志级别颜色/使用帮助/退出），菜单动作额外用 `addAction()` 挂到窗口以保留 `Ctrl+T/W/Q`；“+”新建按钮由 `_SessionTabBar` 承载——它是 `QTabBar` 子类，在 `__init__` 里经 `setTabBar()` 装入（必须先换标签栏再设置 `setTabsClosable()`/`setMovable()`，这两个属性不会随 `setTabBar()` 带到新标签栏），把按钮作为标签栏子控件贴在最后一个标签右边缘之后，并在 `tabLayoutChange()`（标签增删、改名）与 `resizeEvent()` 后重新定位，拖动标签只改变顺序、不改变各标签宽度之和，因此无需额外挂钩，按钮放不下时（标签溢出滚动、窗口过窄）隐藏，新建会话改走 ☰ 菜单或 `Ctrl+T`；标签栏通过事件过滤器处理双击重命名与右键菜单（重命名…/关闭当前会话/新建会话），菜单动作作用于被点击的标签，右键坐标取 `QContextMenuEvent.pos()/globalPos()`（该类没有 `position()`/`globalPosition()`），重命名对话框用 `dialog.findChild(QLineEdit)` 设置长度上限（`QInputDialog.lineEdit()` 在 PySide6 未暴露），弹菜单与弹对话框分别抽成 `_show_tab_menu()`/`_ask_session_title()` 便于测试替换；负责标签、窗口状态与配置保存（内容未变化时跳过写盘），窗口最小尺寸 900×600，启动时把普通窗口居中到主屏可用区域（恢复的几何只保留尺寸，最大化/全屏状态不覆盖；窗口大于可用区域时贴住左上角），主题变化后对每个 `SessionTab` 重新应用数据区字号并调用 `refresh_theme()`。
+- `PageFadeTransition`：`MainWindow` 监听 `QTabWidget.currentChanged`，窗口可见时把上一页的 `grab()` 快照放进与当前页同尺寸、屏蔽鼠标事件的覆盖层；覆盖层用自绘 `paintEvent` 按动画进度同时调整 `QPainter` 透明度和水平偏移，在 360 ms 内按 `InOutSine` 沿标签切换方向平移 48 px；位移前段保持完全不透明，只在最后 35% 的位移进度内淡出，避免长时间半透明叠加，露出下方实时刷新的新页面。切到右侧标签时旧页向右滑出，切到左侧标签时向左滑出。这里刻意不用 `QGraphicsOpacityEffect`：自绘方式没有整页离屏合成，首帧就能稳定显示快照，平移也不做缩放，文字保持清晰。没有上一页或窗口未显示时直接硬切换；同一时间只保留一条覆盖层，快速连续切换先停止并隐藏上一条；覆盖层随页面容器销毁时丢弃引用，避免访问已释放控件。
 - 更新检查入口：☰ 菜单“检查更新”仅在 `update_service` 已配置时启用；`configure_update_service()` 创建 `UpdateCheckRunner` 并启动 3 秒单次定时器。新版本对话框使用纯文本格式显示版本号，更新说明放在详情区；“前往下载”经 `is_allowed_release_url()` 校验 HTTPS 与 GitHub 主机后交给 `QDesktopServices.openUrl()`。
 - `HelpWindow`：由 ☰ 菜单“使用帮助”（`F1`）打开的非模态帮助窗口，左侧 `QListWidget` 目录、右侧只读 `QTextBrowser` 正文，中间用 `QSplitter` 分隔；正文由 `setMarkdown()` 渲染随包分发的 `ui/assets/user-guide.md`（与 `docs/user-guide.md` 逐字节一致，由单元测试守卫），目录取 `headingLevel() == 2` 的标题块并用 `block.position()` 记录位置，选中目录项时把 `QTextCursor` 移到该位置后 `ensureCursorVisible()`；资源缺失时只显示一行降级提示而不抛错；`MainWindow._show_help()` 懒创建并复用单实例。
 - `SessionTab`：用水平 `QSplitter` 组合左侧设置面板和右侧收发区；设置面板是 `QScrollArea`，内容控件挂在 `sidebar_content` 上并顶部对齐（末尾 `addStretch(1)`，多余高度留在滚动区背景而不是分组框内部），接收标题行最左侧是侧栏折叠按钮（`QPushButton`，与暂停/清屏共用描边样式），首行右侧依次是“发送设置”（`QToolButton` 菜单按钮）和“终端/分栏”（`QPushButton`）；终端视图隐藏 `SendPanel`、收起垂直分隔条，接收区末尾使用原始流内联输入；切回分栏恢复原比例，视图模式随标签持久化，底部状态条由 `state_indicator` 色点和 `status_label` 组成；快照标题变化时发出 `title_changed(str)`，由窗口据此刷新标签文本与 tooltip。

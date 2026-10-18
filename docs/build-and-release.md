@@ -100,9 +100,9 @@ Windows 单文件目标机器无需安装 Python。Linux 单文件仍依赖常�
 
 ## 当前 Windows 构建记录
 
-2026-10-18 已使用 `scripts/build.ps1` 成功生成 SerialMNT 0.6.0：
+2026-10-18 已按 `scripts/build.ps1` 的相同步骤成功生成 SerialMNT 0.7.0：
 
 - 文件：`SerialMNT.exe`
-- 大小：48123376 字节
-- SHA-256：`2992d85d383d3ced520465b494ef1bf2267e7636cb10a15e08b018b743e52e78`
+- 大小：48126558 字节
+- SHA-256：`a2a64f2efe79a001988ee55507c6ddd210fcc0b6f3778415bf0241ac031d98e8`
 - 已在本机以 `QT_QPA_PLATFORM=offscreen` 冷启动 10 秒，进程未退出；桌面窗口、任务栏图标、配置恢复和真实串口仍需在目标测试机验收。
