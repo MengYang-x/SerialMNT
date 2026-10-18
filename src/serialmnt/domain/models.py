@@ -5,7 +5,7 @@ from datetime import datetime
 
 from .codecs import decode_text, format_hex
 from .errors import UserFacingError, ValidationError
-from .states import SessionState
+from .states import ACTIVE_FILE_TRANSFER_STATES, FileTransferState, SessionState
 from .types import (
     DEFAULT_DATA_FONT_SIZE,
     DEFAULT_LINE_ENDING,
@@ -149,6 +149,40 @@ class LogRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class FileTransferSnapshot:
+    """一次 Ymodem 文件发送的不可变进度快照。"""
+
+    state: FileTransferState
+    file_name: str
+    file_size: int
+    transferred_bytes: int
+    block_number: int
+    retries: int
+    elapsed_seconds: float
+    message: str = ""
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.state, FileTransferState):
+            raise ValidationError("文件传输状态必须是 FileTransferState。")
+        _require_string(self.file_name, "文件名")
+        _require_non_negative_int(self.file_size, "文件大小")
+        _require_non_negative_int(self.transferred_bytes, "已发送字节数")
+        if self.transferred_bytes > self.file_size:
+            raise ValidationError("已发送字节数不能超过文件大小。")
+        _require_non_negative_int(self.block_number, "数据块序号")
+        _require_non_negative_int(self.retries, "重试次数")
+        if type(self.elapsed_seconds) not in {int, float} or self.elapsed_seconds < 0:
+            raise ValidationError("传输耗时必须是非负数。")
+        if not isinstance(self.message, str):
+            raise ValidationError("传输说明必须是字符串。")
+
+    @property
+    def is_active(self) -> bool:
+        """返回传输是否仍在占用串口线程。"""
+        return self.state in ACTIVE_FILE_TRANSFER_STATES
+
+
+@dataclass(frozen=True, slots=True)
 class SessionSnapshot:
     """供 UI 只读渲染的会话状态快照。"""
 
@@ -160,6 +194,7 @@ class SessionSnapshot:
     rx_bytes: int
     tx_bytes: int
     dropped_records: int
+    transfer: FileTransferSnapshot | None = None
 
     def __post_init__(self) -> None:
         _require_string(self.session_id, "会话 ID")
@@ -173,6 +208,8 @@ class SessionSnapshot:
         _require_non_negative_int(self.rx_bytes, "RX 字节数")
         _require_non_negative_int(self.tx_bytes, "TX 字节数")
         _require_non_negative_int(self.dropped_records, "丢弃记录数")
+        if self.transfer is not None and not isinstance(self.transfer, FileTransferSnapshot):
+            raise ValidationError("transfer 必须是 FileTransferSnapshot 或 None。")
 
 
 @dataclass(frozen=True, slots=True)

@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 
 from serialmnt.application import SessionController
 from serialmnt.domain import (
+    ACTIVE_FILE_TRANSFER_STATES,
     DomainError,
     LogRecord,
     PortInfo,
@@ -29,6 +30,7 @@ from serialmnt.domain import (
     ViewMode,
 )
 from serialmnt.ui.connection_panel import ConnectionPanel
+from serialmnt.ui.file_transfer_panel import FileTransferPanel
 from serialmnt.ui.log_panel import LogPanel
 from serialmnt.ui.qt_bridge import QtSessionBridge
 from serialmnt.ui.receive_panel import ReceivePanel
@@ -120,6 +122,7 @@ class SessionTab(QWidget):
             preferences=preferences,
         )
         self.send_panel = SendPanel(controller=self.controller, preferences=preferences)
+        self.file_transfer_panel = FileTransferPanel(controller=self.controller)
         self.log_panel = LogPanel(controller=self.controller)
 
     def _build_sidebar_toggle(self) -> None:
@@ -256,6 +259,7 @@ class SessionTab(QWidget):
         sidebar_layout.setContentsMargins(0, 0, 0, 0)
         sidebar_layout.setSpacing(8)
         sidebar_layout.addWidget(self.connection_panel)
+        sidebar_layout.addWidget(self.file_transfer_panel)
         sidebar_layout.addWidget(self.log_panel)
         # 内容顶部对齐：多余高度留在滚动区背景，避免分组框内部出现大片空白。
         sidebar_layout.addStretch(1)
@@ -328,6 +332,7 @@ class SessionTab(QWidget):
     def refresh_theme(self) -> None:
         """主题切换后刷新接收区配色和状态点颜色。"""
         self.receive_panel.refresh_theme()
+        self.file_transfer_panel.refresh_theme()
         self._refresh_status()
 
     def _refresh_status(self) -> None:
@@ -455,8 +460,14 @@ class SessionTab(QWidget):
         if snapshot.title != self._title:
             self._title = snapshot.title
             self.title_changed.emit(snapshot.title)
+        transfer_active = (
+            snapshot.transfer is not None and snapshot.transfer.state in ACTIVE_FILE_TRANSFER_STATES
+        )
         self.connection_panel.apply_snapshot(snapshot)
+        self.connection_panel.set_transfer_active(transfer_active)
         self.send_panel.set_connected(snapshot.state is SessionState.CONNECTED)
+        self.send_panel.set_transfer_active(transfer_active)
+        self.file_transfer_panel.apply_snapshot(snapshot)
         self.log_panel.apply_snapshot(snapshot)
         self._refresh_status()
         if snapshot.last_error is None:
@@ -494,11 +505,12 @@ class SessionTab(QWidget):
         """在需要时确认并关闭会话。"""
         state = self.controller.state
         if state in {SessionState.CONNECTED, SessionState.CONNECTING, SessionState.DISCONNECTING}:
-            answer = QMessageBox.question(
-                self,
-                "关闭会话",
-                "当前会话仍处于活动状态，确定关闭并释放串口吗？",
-            )
+            transfer = self.controller.transfer
+            if transfer is not None and transfer.is_active:
+                message = "正在发送文件，关闭将中止传输并释放串口。确定继续吗？"
+            else:
+                message = "当前会话仍处于活动状态，确定关闭并释放串口吗？"
+            answer = QMessageBox.question(self, "关闭会话", message)
             if answer != QMessageBox.StandardButton.Yes:
                 return False
             self.controller.close(force=True)

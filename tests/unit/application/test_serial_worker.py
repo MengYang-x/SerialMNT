@@ -1,12 +1,20 @@
 """测试串口 Worker 的命令队列和异常路径。"""
 
+from pathlib import Path
 from typing import cast
 
 import pytest
-from tests.fixtures.fakes import FakeTransport, RecordingWorkerHandler
+from tests.fixtures.fakes import (
+    FakeTransport,
+    RecordingWorkerHandler,
+    YmodemReceiverTransport,
+)
 
 from serialmnt.application import SerialWorker, SerialWorkerOptions
+from serialmnt.application.ymodem import YmodemOptions
 from serialmnt.domain import (
+    FileTransferError,
+    FileTransferState,
     InternalError,
     PortBusyError,
     SendQueueFullError,
@@ -14,6 +22,23 @@ from serialmnt.domain import (
     TransportIOError,
     ValidationError,
 )
+
+
+def _ymodem_options(**overrides: object) -> YmodemOptions:
+    values: dict[str, object] = {
+        "handshake_timeout": 1.0,
+        "header_timeout": 0.5,
+        "data_timeout": 0.2,
+        "eot_timeout": 0.2,
+        "final_block_timeout": 0.05,
+        "second_c_grace": 0.005,
+        "final_c_grace": 0.005,
+        "poll_timeout": 0.005,
+        "max_retries": 2,
+        "progress_interval": 0,
+    }
+    values.update(overrides)
+    return YmodemOptions(**values)  # type: ignore[arg-type]
 
 
 def _worker(
@@ -260,3 +285,126 @@ def test_worker_reports_close_failures(error: BaseException) -> None:
     assert handler.io_error_event.wait(1.0)
     assert handler.stopped_event.wait(1.0)
     assert worker.join(1.0)
+
+
+def _transfer_worker(
+    transport: FakeTransport,
+    *,
+    ymodem_options: YmodemOptions | None = None,
+) -> tuple[SerialWorker, RecordingWorkerHandler]:
+    handler = RecordingWorkerHandler()
+    worker = SerialWorker(
+        config=SerialConfig(port="COM1"),
+        transport_factory=lambda: transport,
+        event_handler=handler,
+        options=SerialWorkerOptions(
+            read_timeout=0.005,
+            ymodem_options=ymodem_options or _ymodem_options(),
+        ),
+    )
+    return worker, handler
+
+
+def test_worker_sends_file_and_resumes_normal_send(tmp_path: Path) -> None:
+    source = b"ABCDEF" * 500
+    path = tmp_path / "firmware.bin"
+    path.write_bytes(source)
+    transport = YmodemReceiverTransport()
+    worker, handler = _transfer_worker(transport)
+    worker.start()
+    try:
+        assert handler.opened_event.wait(1.0)
+        worker.start_file_send(path)
+
+        with pytest.raises(FileTransferError):
+            worker.send(b"busy")
+
+        assert handler.wait_for_transfer(lambda item: item.state is FileTransferState.SUCCEEDED)
+        assert transport.received_data() == source
+        assert transport.frame_errors == []
+
+        worker.send(b"after")
+        assert handler.sent_event.wait(1.0)
+        assert handler.sent[-1] == b"after"
+    finally:
+        worker.request_stop()
+        assert handler.stopped_event.wait(1.0)
+        assert worker.join(1.0)
+
+
+def test_worker_cancels_file_transfer_and_keeps_connection(tmp_path: Path) -> None:
+    source = b"0123456789" * 100
+    path = tmp_path / "firmware.bin"
+    path.write_bytes(source)
+    transport = YmodemReceiverTransport(initial_c=False)
+    worker, handler = _transfer_worker(transport)
+    worker.start()
+    try:
+        assert handler.opened_event.wait(1.0)
+        worker.start_file_send(path)
+        assert handler.wait_for_transfer(lambda item: item.state is FileTransferState.WAITING)
+
+        assert worker.cancel_file_transfer()
+        assert handler.wait_for_transfer(lambda item: item.state is FileTransferState.CANCELLED)
+        assert transport.writes[-1] == b"\x18" * 8
+        assert not worker.is_transferring
+
+        worker.send(b"after-cancel")
+        assert handler.sent_event.wait(1.0)
+        assert handler.sent[-1] == b"after-cancel"
+    finally:
+        worker.request_stop()
+        assert handler.stopped_event.wait(1.0)
+        assert worker.join(1.0)
+
+
+def test_worker_transfer_failure_does_not_stop_worker(tmp_path: Path) -> None:
+    path = tmp_path / "firmware.bin"
+    path.write_bytes(b"x" * 1500)
+    transport = YmodemReceiverTransport(silent_blocks=frozenset({1}))
+    worker, handler = _transfer_worker(
+        transport,
+        ymodem_options=_ymodem_options(max_retries=1, data_timeout=0.02),
+    )
+    worker.start()
+    try:
+        assert handler.opened_event.wait(1.0)
+        worker.start_file_send(path)
+
+        assert handler.wait_for_transfer(lambda item: item.state is FileTransferState.FAILED)
+        assert worker.is_alive
+        assert handler.io_errors == []
+
+        worker.send(b"still-alive")
+        assert handler.sent_event.wait(1.0)
+    finally:
+        worker.request_stop()
+        assert handler.stopped_event.wait(1.0)
+        assert worker.join(1.0)
+
+
+def test_worker_validates_file_transfer_requests(tmp_path: Path) -> None:
+    path = tmp_path / "firmware.bin"
+    path.write_bytes(b"x" * 100)
+    transport = YmodemReceiverTransport(initial_c=False)
+    worker, handler = _transfer_worker(transport)
+
+    with pytest.raises(ValidationError):
+        worker.start_file_send(cast(Path, "not-a-path"))
+    with pytest.raises(ValidationError):
+        worker.start_file_send(path, block_size=300)
+
+    worker.start()
+    try:
+        assert handler.opened_event.wait(1.0)
+        worker.start_file_send(path)
+        with pytest.raises(FileTransferError):
+            worker.start_file_send(path)
+        with pytest.raises(FileTransferError):
+            worker.set_line_state(dtr=False, rts=False)
+        assert worker.cancel_file_transfer()
+        assert handler.wait_for_transfer(lambda item: item.state is FileTransferState.CANCELLED)
+    finally:
+        worker.request_stop()
+        assert handler.stopped_event.wait(1.0)
+        assert worker.join(1.0)

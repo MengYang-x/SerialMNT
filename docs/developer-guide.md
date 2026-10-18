@@ -3,7 +3,7 @@
 > 文档版本：1.0  
 > 软件版本：0.1.0  
 > 对应基线提交：`cb6c23a`  
-> 更新时间：2026-10-02 09:32:11 CST（星期五）  
+> 更新时间：2026-10-18  
 > 适用读者：维护者、测试人员和参与扩展的开发者
 
 ## 1. 文档职责
@@ -59,7 +59,8 @@ bootstrap -> ui -> application -> domain
 
 - `LogRecord` 保存 UTC 时间、方向、原始 `bytes`、文本编码、文本、HEX 和会话 ID。
 - `LogRecord.from_bytes()` 是创建串口记录的标准入口，文本和 HEX 必须从原始字节派生。
-- `SessionSnapshot` 保存会话 ID、标题、状态、配置、最后错误、RX/TX 字节数和累计淘汰记录数。
+- `SessionSnapshot` 保存会话 ID、标题、状态、配置、最后错误、RX/TX 字节数、累计淘汰记录数和可选的 `FileTransferSnapshot`。
+- `FileTransferSnapshot` 保存 Ymodem 传输状态、文件名、文件大小、已确认字节、块序号、重试次数、耗时和说明；传输状态为 `waiting`、`sending`、`finishing`、`succeeded`、`failed` 或 `cancelled`。
 - 回调跨线程传递时只使用不可变 `LogRecord` 和 `SessionSnapshot`。
 - `SessionPreferences.view_mode` 保存每个标签的 `split`/`terminal` 视图模式，默认 `split`；旧配置缺少该字段时按 `split` 迁移。
 - `SessionPreferences.line_ending` 保存发送换行策略，默认 `lf`；旧配置缺少该字段时按 `lf` 迁移，显式保存的 `none` 不会被改写。
@@ -86,6 +87,17 @@ bootstrap -> ui -> application -> domain
 - `LogSink`：打开、写入、刷新和关闭日志。
 
 测试使用 Fake 实现替换这些协议，不依赖真实硬件。
+
+### 3.5 Ymodem 文件发送模型
+
+- `application/ymodem.py` 提供 `YmodemSender`，只依赖 `domain.Transport`、领域类型和注入的单调时钟，不依赖 Qt、pyserial 或 UI。
+- 文件头固定为 SOH/128 字节，内容为 `basename NUL 十进制大小 NUL`，其余用 `0x00` 填充；数据块默认 STX/1024 字节，也可选 SOH/128 字节，最后一块用 `0x1A` 补齐。序号按 8 位回绕，CRC 使用 CRC-16/XMODEM（`binascii.crc_hqx`），高字节在前。
+- 文件名只取 basename，并通过 NFKD 分解转为 ASCII：非 ASCII 字符被丢弃，空格和特殊字符替换为 `_`，保留扩展名；文件名无法放入 128 字节文件头时拒绝发送。
+- 握手等待接收端 `C`；文件头后最多等待 0.5 s 的第二个 `C`，没有也继续发送数据，兼容不重发 `C` 的 bootloader。
+- 每块等待 ACK；NAK 或超时重发同一块，默认最多 10 次。每个阶段均有有限超时，不存在无限等待。
+- EOT 允许接收端先 NAK 再 ACK 或直接 ACK；EOT 确认后短等 `C` 并发送全零结束空块，结束空块未确认不回滚已全部确认的文件。
+- 用户取消、Worker 停止、重试耗尽、接收端双 CAN、文件读取失败和传输 I/O 错误都会终止传输；取消或失败时尽力发送 8 个 CAN 字节。
+- 传输期间协议字节由引擎消费，不进入接收缓冲、CSV/TXT 日志和 TX/RX 计数；只向界面发布不可变进度快照和开始/终态 `SYSTEM` 记录。
 
 ## 4. 会话状态机
 
@@ -116,7 +128,9 @@ disconnected -> connecting -> connected -> disconnecting -> disconnected
 - 每个连接创建一个标准库 `threading.Thread`，名称为 `serialmnt-serial-worker`，不是 `QThread`。
 - Worker 默认读取块大小为 `8192` 字节，读取超时 `50 ms`，关闭超时 `1 s`。
 - 发送队列最大 `256` 个写入任务；队列满时抛出 `SendQueueFullError`，不阻塞 UI。
-- DTR/RTS 使用无界的小型控制队列；队列元素是固定布尔控制命令，不存在用户数据堆积风险。
+- Ymodem 启动命令与普通写入共用同一个 FIFO 队列，保证已排队的普通数据先发完；`start_file_send()` 在锁内把传输标记为排队，之后的普通 `send()` 和 `set_line_state()` 抛 `FileTransferError`。协议引擎在 Worker 线程内同步运行并独占 `Transport`，不新增线程，也不与普通读取循环抢字节。
+- 传输的读等待使用不超过 50 ms 的切片轮询，用户取消或 Worker 停止在切片边界生效；写超时按波特率计算（`长度 × 11 / 波特率 × 2`，最少 2 s），避免低波特率下误判超时。
+- DTR/RTS 使用无界的小型控制队列；队列元素是固定布尔控制命令，不存在用户数据堆积风险；文件传输期间拒绝新的线路控制命令。
 - `SessionController` 和 `SessionManager` 使用 `RLock` 保护共享状态。
 - Worker 通过 `WorkerEventHandler` 回调 controller；UI 由 `QtSessionBridge` 把回调转换为 Qt 信号，并以 queued connection 投递到主线程。
 - 控件不得读取 Worker 内部状态，只能读取 controller 的不可变快照或缓冲副本。
@@ -147,9 +161,19 @@ disconnected -> connecting -> connected -> disconnecting -> disconnected
 3. Worker 使用 `write_all()` 在写入超时内发送完整任务。
 4. 成功后创建方向为 `tx` 的 `LogRecord`，进入和接收相同的缓冲、日志和 UI 数据流。
 
-### 6.4 断开和退出
+### 6.4 Ymodem 文件发送
 
-1. controller 状态切换到 `disconnecting`，Worker 设置停止事件并等待最多 `1.5 s`。
+1. UI 调用 `controller.start_file_send(path, block_size)`；controller 校验连接状态、8N1/无 XON-XOFF、文件存在且当前没有活动传输，构造 `waiting` 快照并追加一条开始记录。
+2. controller 调用 Worker 的 `start_file_send()`；启动命令进入写队列，Worker 的传输阶段变为排队，后续普通发送被拒绝。
+3. Worker 弹出启动命令后打开文件，调用 `YmodemSender.send()`；引擎自行读取 ACK/NAK/C/CAN，不与常规接收循环共享字节。
+4. 引擎每收到一个数据块 ACK 就通过 `WorkerEventHandler.on_file_transfer()` 发布进度；进度按 `progress_interval` 节流，终态由 Worker 在释放传输锁后发布。
+5. controller 在锁内更新 `_transfer`，终态追加一条 `SYSTEM` 记录，然后走既有快照回调链路；UI 的 `FileTransferPanel` 根据 `SessionSnapshot.transfer` 刷新进度、阶段和按钮。
+6. 用户取消或断开连接只设置取消事件；Worker 在下一个读切片或帧边界停止，尽力发送 CAN 序列并发布 `cancelled` 终态。
+7. 传输结束后 Worker 恢复正常读取循环；迟到的协议字节按普通 RX 处理，不按字节值过滤，避免误删设备随后输出的正常文本。
+
+### 6.5 断开和退出
+
+1. controller 状态切换到 `disconnecting`，先请求取消文件传输，再设置停止事件并等待最多 `1.5 s`；若传输仍在进行，等待上限放宽为 `2 × 帧写超时 + 0.5 s`（帧写超时为 `max(2 s, 1029 × 11 / 波特率 × 2)`），总上限 `5 s`，以覆盖无法中途打断的当前帧写入和随后尽力发送的取消序列。
 2. Worker 退出循环，关闭 `Transport`，最后触发 `on_stopped()`。
 3. controller 刷新并关闭活动日志，然后把状态改回 `disconnected`。
 4. 超时则进入 `error` 并记录“等待串口线程退出超时”。
@@ -196,6 +220,8 @@ CSV 输出使用 `utf-8-sig` 和 RFC 4180 字段：`timestamp`、`direction`、`
 - `SendPanel`：分栏视图使用两行标题（格式/换行/发送、历史/间隔/周期）、文本/HEX 编码和周期发送；编辑器使用等宽字体，标题行下拉框与按钮统一为 `CONTROL_HEIGHT_PX`。发送编辑器高度跟随内容（最多 `_EDITOR_MAX_LINES` 行，再多转为内部滚动），面板垂直方向取 `Maximum` 策略把多余高度让给接收区；高度按文档布局的块矩形累加得出，且必须等事件循环下一轮再量——`documentSizeChanged` 触发时块的行布局还没算完，量到的是空值。终端视图不再使用独立发送控件，`send_content()` 负责发送内联终端提交的单行文本；构造出的 payload 为空时直接视为成功无操作，不调用 controller。
 - `TerminalOutput`：按 `TerminalScreen` 快照重建网格，把连续同样式单元格合并成运行段写入文档，块状光标用 `paintEvent` 叠加绘制；内联草稿渲染在模型光标处，支持回车提交、上下键历史、多行粘贴逐行发送。终端采用仅设备回显，提交成功后移除本地草稿，TX 记录不在终端视图渲染；画面只渲染最近 2000 行，更早的滚动历史由模型保留；分栏视图用 `append_segments()` 按 (文本, 颜色, 加粗) 片段追加一行，`append_text()` 保留为单色快捷方式。
 - 终端模式高亮：每行渲染前调用 `terminal_highlight.find_highlights()` 识别 IPv4/MAC（`address`）、URL/邮箱（`link`）与关键字 OK/SUCCESS/PASS（`success`）、ERROR/FAIL（`error`）、WARN（`warning`）；关键字大小写不敏感、整词匹配，命中区间按 URL→邮箱→MAC→IPv4→关键字先到先得、重叠跳过；只有前景色未被 ANSI 显式设置的单元格才用 `theme_manager.highlight_colors()` 的对应颜色覆盖，其它属性不变。接收标题行的“高亮”勾选框（仅终端视图可见、默认勾选）通过 `TerminalOutput.set_highlight_enabled()` 统一开关整层高亮，并随 `SessionPreferences.highlight_enabled` 持久化。
+- `FileTransferPanel`：侧栏中的“Ymodem 发送”分组，位于“串口设置”和“日志与导出”之间，因此终端视图隐藏发送区时进度和取消仍然可见；包含只读文件路径、26×26 的“…”文件选择按钮、“1K 块”勾选框、进度条、百分比、阶段文本、可省略的指标文本和“发送文件/取消”按钮。`apply_snapshot()` 只根据 `SessionSnapshot.state` 和 `transfer` 更新控件；活动传输期间禁用文件选择和块大小，取消按一次后显示“正在取消…”并禁用；失败原因显示在阶段和指标文本中，同时由 controller 写入 `SYSTEM` 记录，不使用模态框。
+- `SendPanel` 的 `set_transfer_active()` 在 Ymodem 传输期间停止周期发送并禁用发送/周期按钮，`send_content()` 直接返回 `False`，保留终端内联草稿且不产生错误框；`ConnectionPanel.set_transfer_active()` 禁用 DTR/RTS，避免传输中误复位设备；`SessionTab.request_close()` 在活动传输时使用包含“将中止传输”的确认文案。
 - `LogPanel`：以“日志与导出”分组呈现自动日志设置、打开目录和导出当前缓冲；网格布局为“自动保存 + 格式”一行（格式下拉框 `AlignRight`，与“…”按钮右对齐）、“目录”标签 + 路径输入框 + “…”选择按钮一行、“打开目录 + 导出当前缓冲”一行（按 `3:4` 拉伸，导出更宽）、状态文本一行，且不设行拉伸，因此面板贴合内容、最小宽度可放进侧栏最窄宽度；选择目录收进“…”按钮后省掉独立一行，该按钮为 `QToolButton` 并固定 `26×26`，与端口刷新按钮一致。长路径状态文本不参与最小宽度计算，并按标签宽度做中间省略，完整路径保留在 tooltip。
 - `theme_manager`：`apply_theme()` 以 `style_sheet.tokens()` 为唯一取色来源，同时设置调色板（`Base` 取 `editor`、`Window` 取 `window`、`Highlight` 取 `accent_fill`，深色下额外指定禁用态文字）和全局 QSS，并按主题重设占位符文字颜色；`resolved_theme()`、`data_colors()`、`status_colors()`、`ansi_colors()` 和 `data_font()` 提供主题解析结果、数据区文字配色（`DataColors` 含正文 `text`、方向 `rx`/`tx` 与 `system`）、状态圆点配色（`StatusColors` 按已连接/错误/其余三态各给一个填充色）、ANSI 16 色和等宽字体；`ansi_color()` 把 0-255 索引映射为颜色（0-15 主题语义色，16-231 为 xterm 色立方，232-255 为灰度），`highlight_colors()` 提供终端模式高亮的地址、链接与成功/失败/警告关键字颜色；`CONTROL_HEIGHT_PX = 24` 是标题行与顶栏控件的统一高度。
 - `style_sheet`：`ThemeTokens` 保存浅色/深色两套设计令牌，`build_stylesheet()` 用令牌生成卡片、标签栏、下拉框、勾选框、滚动条、菜单等控件的 QSS。渲染数据区的 `editor` 必须与 palette `Base` 取同一令牌，否则对比度测试将不再反映真实渲染；QSS 刻意不声明 `font-family`/`font-size`，数据区等宽字体仍由 `data_font()` 在控件上设置。资源放在 `ui/assets/`，`assets_dir()` 兼容 PyInstaller 单文件解包目录，`app_icon()` 读取其中的 PNG 作为窗口图标；下拉箭头与勾选标记引用同目录的 SVG（`chevron-*.svg`、`check*.svg`），新增资源需同时登记到 `pyproject.toml` 的 `package-data` 与 `packaging/serialmnt.spec` 的 `datas`。
@@ -215,6 +241,7 @@ CSV 输出使用 `utf-8-sig` 和 RFC 4180 字段：`timestamp`、`direction`、`
 - 非法状态转换、缓冲容量和发送队列满。
 - 端口不存在、占用、权限不足和传输 I/O 错误。
 - 日志与配置文件 I/O 错误。
+- Ymodem 传输错误（`FILE_TRANSFER_ERROR`）：文件不可读、文件名过长、串口参数不兼容、重试耗尽、对端取消和传输忙。协议失败不写入 `SessionSnapshot.last_error`，只体现在 `FileTransferSnapshot` 和 `SYSTEM` 记录中，串口连接保持可用；真实 `TransportIOError` 仍走既有致命错误和断开路径。
 - 未预期内部错误。
 
 底层 `pyserial` 异常在 `SerialTransport` 边界映射为领域错误；UI 不显示未处理的 traceback。

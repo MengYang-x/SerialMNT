@@ -2,12 +2,17 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from queue import Empty, Full, Queue
 from threading import Event, Lock, Thread
+from time import monotonic
 from typing import Protocol
 
+from serialmnt.application.ymodem import BLOCK_SIZE_1024, YmodemOptions, YmodemSender
 from serialmnt.domain import (
     DomainError,
+    FileTransferError,
+    FileTransferSnapshot,
     InternalError,
     SendQueueFullError,
     SerialConfig,
@@ -30,6 +35,8 @@ class SerialWorkerOptions:
     read_chunk_size: int = DEFAULT_READ_CHUNK_SIZE
     write_queue_size: int = DEFAULT_WRITE_QUEUE_SIZE
     close_timeout: float = DEFAULT_CLOSE_TIMEOUT
+    ymodem_options: YmodemOptions | None = None
+    monotonic_function: Callable[[], float] | None = None
 
     def __post_init__(self) -> None:
         if self.read_timeout <= 0:
@@ -40,6 +47,10 @@ class SerialWorkerOptions:
             raise ValidationError("发送队列大小必须是正整数。")
         if self.close_timeout <= 0:
             raise ValidationError("关闭超时必须大于零。")
+        if self.ymodem_options is not None and not isinstance(self.ymodem_options, YmodemOptions):
+            raise ValidationError("ymodem_options 必须是 YmodemOptions 或 None。")
+        if self.monotonic_function is not None and not callable(self.monotonic_function):
+            raise ValidationError("monotonic_function 必须可调用。")
 
 
 class WorkerEventHandler(Protocol):
@@ -61,6 +72,10 @@ class WorkerEventHandler(Protocol):
         """完成一次串口写入。"""
         ...
 
+    def on_file_transfer(self, transfer: FileTransferSnapshot) -> None:
+        """发布 Ymodem 文件发送进度或终态。"""
+        ...
+
     def on_io_error(self, error: DomainError) -> None:
         """读取、写入或线路控制失败。"""
         ...
@@ -79,6 +94,12 @@ class _SetLineStateCommand:
 @dataclass(frozen=True, slots=True)
 class _WriteCommand:
     data: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class _StartFileTransferCommand:
+    path: Path
+    block_size: int
 
 
 class SerialWorker:
@@ -102,16 +123,31 @@ class SerialWorker:
         self._read_timeout = selected_options.read_timeout
         self._read_chunk_size = selected_options.read_chunk_size
         self._close_timeout = selected_options.close_timeout
+        self._ymodem_options = selected_options.ymodem_options
+        self._monotonic = selected_options.monotonic_function or monotonic
         self._control_queue: Queue[_SetLineStateCommand] = Queue()
-        self._write_queue: Queue[_WriteCommand] = Queue(maxsize=selected_options.write_queue_size)
+        self._write_queue: Queue[_WriteCommand | _StartFileTransferCommand] = Queue(
+            maxsize=selected_options.write_queue_size
+        )
         self._stop_requested = Event()
         self._start_lock = Lock()
         self._thread: Thread | None = None
+        # 传输状态与写队列的“检查 + 入队”必须由同一把锁保护。
+        self._transfer_lock = Lock()
+        self._transfer_cancel = Event()
+        self._transfer_pending = False
+        self._transfer_active = False
 
     @property
     def is_alive(self) -> bool:
         """返回工作线程是否仍在运行。"""
         return self._thread is not None and self._thread.is_alive()
+
+    @property
+    def is_transferring(self) -> bool:
+        """返回是否有 Ymodem 文件发送已排队或正在执行。"""
+        with self._transfer_lock:
+            return self._transfer_pending or self._transfer_active
 
     def start(self) -> None:
         """启动工作线程，每个 Worker 只能启动一次。"""
@@ -129,23 +165,56 @@ class SerialWorker:
         return not self._thread.is_alive()
 
     def request_stop(self) -> None:
-        """请求 Worker 安全停止。"""
+        """请求 Worker 安全停止，并中止正在进行的文件发送。"""
         self._stop_requested.set()
+        self._transfer_cancel.set()
 
     def send(self, data: bytes) -> None:
         """将完整写入任务加入有界发送队列。"""
         if not isinstance(data, bytes) or not data:
             raise ValidationError("待发送数据必须是非空 bytes。")
-        try:
-            self._write_queue.put_nowait(_WriteCommand(data=data))
-        except Full as exc:
-            raise SendQueueFullError("发送队列已满，请等待当前数据发送完成。") from exc
+        with self._transfer_lock:
+            if self._transfer_pending or self._transfer_active:
+                raise FileTransferError("Ymodem 文件传输进行中，暂不能发送普通数据。")
+            try:
+                self._write_queue.put_nowait(_WriteCommand(data=data))
+            except Full as exc:
+                raise SendQueueFullError("发送队列已满，请等待当前数据发送完成。") from exc
 
     def set_line_state(self, *, dtr: bool, rts: bool) -> None:
         """将 DTR/RTS 控制加入控制队列。"""
         if type(dtr) is not bool or type(rts) is not bool:
             raise ValidationError("DTR 和 RTS 必须是布尔值。")
+        with self._transfer_lock:
+            if self._transfer_pending or self._transfer_active:
+                raise FileTransferError("Ymodem 文件传输进行中，暂不能修改 DTR/RTS。")
         self._control_queue.put(_SetLineStateCommand(dtr=dtr, rts=rts))
+
+    def start_file_send(self, path: Path, *, block_size: int = BLOCK_SIZE_1024) -> None:
+        """把一次 Ymodem 文件发送排入写队列，已有普通写入会先发送完。"""
+        if not isinstance(path, Path):
+            raise ValidationError("文件路径必须是 pathlib.Path。")
+        if block_size not in {128, BLOCK_SIZE_1024}:
+            raise ValidationError("Ymodem 数据块只允许 128 或 1024 字节。")
+        with self._transfer_lock:
+            if self._transfer_pending or self._transfer_active:
+                raise FileTransferError("已有文件传输正在进行。")
+            try:
+                self._write_queue.put_nowait(
+                    _StartFileTransferCommand(path=path, block_size=block_size)
+                )
+            except Full as exc:
+                raise SendQueueFullError("发送队列已满，请等待当前数据发送完成。") from exc
+            self._transfer_pending = True
+            self._transfer_cancel.clear()
+
+    def cancel_file_transfer(self) -> bool:
+        """请求取消当前排队或执行中的文件发送；没有传输时返回 False。"""
+        with self._transfer_lock:
+            if not (self._transfer_pending or self._transfer_active):
+                return False
+            self._transfer_cancel.set()
+            return True
 
     def _run(self) -> None:
         transport: Transport | None = None
@@ -198,6 +267,9 @@ class SerialWorker:
             command = self._write_queue.get_nowait()
         except Empty:
             return
+        if isinstance(command, _StartFileTransferCommand):
+            self._run_file_transfer(transport, command)
+            return
         try:
             transport.write_all(command.data, timeout=1.0)
         except DomainError as exc:
@@ -209,6 +281,46 @@ class SerialWorker:
             self._stop_requested.set()
             return
         self._event_handler.on_bytes_sent(command.data)
+
+    def _run_file_transfer(
+        self,
+        transport: Transport,
+        command: _StartFileTransferCommand,
+    ) -> None:
+        with self._transfer_lock:
+            self._transfer_pending = False
+            self._transfer_active = True
+        result: FileTransferSnapshot | None = None
+        try:
+            sender = YmodemSender(
+                transport=transport,
+                monotonic=self._monotonic,
+                baudrate=self._config.baudrate,
+                options=self._ymodem_options,
+                on_progress=self._event_handler.on_file_transfer,
+                is_cancelled=self._is_transfer_cancelled,
+            )
+            result = sender.send(command.path, block_size=command.block_size)
+        except DomainError as exc:
+            self._event_handler.on_io_error(exc)
+            self._stop_requested.set()
+        except Exception as exc:
+            self._event_handler.on_io_error(InternalError(f"文件传输时发生未预期错误：{exc}"))
+            self._stop_requested.set()
+        finally:
+            self._release_transfer()
+        if result is not None:
+            # 先释放传输锁再发布终态，界面收到结果后立即发送不会撞上 busy。
+            self._event_handler.on_file_transfer(result)
+
+    def _release_transfer(self) -> None:
+        with self._transfer_lock:
+            self._transfer_active = False
+            self._transfer_pending = False
+            self._transfer_cancel.clear()
+
+    def _is_transfer_cancelled(self) -> bool:
+        return self._stop_requested.is_set() or self._transfer_cancel.is_set()
 
     def _read_once(self, transport: Transport) -> None:
         try:

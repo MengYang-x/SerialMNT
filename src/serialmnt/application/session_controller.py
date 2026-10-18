@@ -1,7 +1,7 @@
 """单标签串口会话的应用层编排。"""
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from threading import RLock
 from uuid import uuid4
@@ -12,9 +12,14 @@ from serialmnt.application.serial_worker import (
     SerialWorkerOptions,
     WorkerEventHandler,
 )
+from serialmnt.application.ymodem import BLOCK_SIZE_1024, MINIMUM_WRITE_TIMEOUT
 from serialmnt.domain import (
+    ACTIVE_FILE_TRANSFER_STATES,
     Clock,
     DomainError,
+    FileTransferError,
+    FileTransferSnapshot,
+    FileTransferState,
     InvalidStateTransitionError,
     LogFormat,
     LogIOError,
@@ -35,6 +40,11 @@ SnapshotCallback = Callable[[SessionSnapshot], None]
 RecordCallback = Callable[[LogRecord], None]
 
 MAX_SESSION_TITLE_LENGTH = 40
+YMODEM_REQUIRED_BYTESIZE = 8
+# 1K 数据帧的线上长度（1029 字节）和 8N1 每字节 11 位，用于估算退出等待上限。
+YMODEM_TRANSFER_FRAME_BYTES = 1029
+YMODEM_FRAME_BITS_PER_BYTE = 11
+MAX_TRANSFER_JOIN_TIMEOUT = 5.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,6 +101,7 @@ class SessionController(WorkerEventHandler):
         self._state_machine = SessionStateMachine()
         self._worker: SerialWorker | None = None
         self._last_error: UserFacingError | None = None
+        self._transfer: FileTransferSnapshot | None = None
         self._rx_bytes = 0
         self._tx_bytes = 0
         self._on_snapshot = selected_options.on_snapshot
@@ -143,6 +154,12 @@ class SessionController(WorkerEventHandler):
         """返回当前内存缓冲的不可变快照。"""
         with self._lock:
             return self._buffer.records
+
+    @property
+    def transfer(self) -> FileTransferSnapshot | None:
+        """返回最近一次 Ymodem 文件发送的进度或结果。"""
+        with self._lock:
+            return self._transfer
 
     @property
     def auto_log_enabled(self) -> bool:
@@ -215,6 +232,7 @@ class SessionController(WorkerEventHandler):
                 )
             self._config = selected_config
             self._last_error = None
+            self._transfer = None
             self._state_machine.connect()
             worker = SerialWorker(
                 config=selected_config,
@@ -249,8 +267,9 @@ class SessionController(WorkerEventHandler):
         if snapshot is not None:
             self._notify_snapshot(snapshot)
         if worker is not None:
+            worker.cancel_file_transfer()
             worker.request_stop()
-            stopped = worker.join(timeout)
+            stopped = worker.join(self._transfer_join_timeout(timeout))
             if not stopped:
                 with self._lock:
                     if self._state_machine.state is SessionState.DISCONNECTING:
@@ -275,11 +294,13 @@ class SessionController(WorkerEventHandler):
                 raise InvalidStateTransitionError(state, "close", SessionState.CLOSED)
             worker = self._worker
             if worker is not None:
+                worker.cancel_file_transfer()
                 worker.request_stop()
-                worker.join(1.5)
+                worker.join(self._transfer_join_timeout(1.5))
         with self._lock:
             self._state_machine.close(force=force)
             self._worker = None
+            self._transfer = None
             snapshot = self._build_snapshot()
         self._notify_snapshot(snapshot)
 
@@ -287,6 +308,7 @@ class SessionController(WorkerEventHandler):
         """提交一次完整写入。"""
         with self._lock:
             self._require_connected("send")
+            self._require_no_transfer("send")
             worker = self._require_worker()
         worker.send(data)
 
@@ -294,8 +316,68 @@ class SessionController(WorkerEventHandler):
         """修改已连接会话的 DTR/RTS 状态。"""
         with self._lock:
             self._require_connected("set_line_state")
+            self._require_no_transfer("set_line_state")
             worker = self._require_worker()
         worker.set_line_state(dtr=dtr, rts=rts)
+
+    def start_file_send(self, path: Path, *, block_size: int = BLOCK_SIZE_1024) -> None:
+        """提交一次 Ymodem 单文件发送。"""
+        if not isinstance(path, Path):
+            raise ValidationError("文件路径必须是 pathlib.Path。")
+        if block_size not in {128, BLOCK_SIZE_1024}:
+            raise ValidationError("Ymodem 数据块只允许 128 或 1024 字节。")
+        with self._lock:
+            self._require_connected("start_file_send")
+            self._require_no_transfer("start_file_send")
+            self._validate_ymodem_config()
+            worker = self._require_worker()
+            size = self._file_size(path)
+            transfer = FileTransferSnapshot(
+                state=FileTransferState.WAITING,
+                file_name=path.name or "file",
+                file_size=size,
+                transferred_bytes=0,
+                block_number=0,
+                retries=0,
+                elapsed_seconds=0.0,
+                message="等待接收端发起传输。",
+            )
+            self._transfer = transfer
+            record = self._system_record(f"开始发送文件：{transfer.file_name}（{size} 字节）。")
+            self._append_record_locked(record)
+            snapshot = self._build_snapshot()
+        self._notify_record(record)
+        self._notify_snapshot(snapshot)
+        try:
+            worker.start_file_send(path, block_size=block_size)
+        except DomainError:
+            with self._lock:
+                self._transfer = None
+                snapshot = self._build_snapshot()
+            self._notify_snapshot(snapshot)
+            raise
+
+    def cancel_file_send(self) -> bool:
+        """请求取消当前 Ymodem 文件发送；没有传输时返回 False。"""
+        with self._lock:
+            worker = self._worker
+        if worker is None:
+            return False
+        return worker.cancel_file_transfer()
+
+    def on_file_transfer(self, transfer: FileTransferSnapshot) -> None:
+        """处理 Worker 线程发布的文件发送进度或终态。"""
+        terminal = transfer.state not in ACTIVE_FILE_TRANSFER_STATES
+        record = None
+        with self._lock:
+            self._transfer = transfer
+            if terminal:
+                record = self._system_record(self._transfer_record_text(transfer))
+                self._append_record_locked(record)
+            snapshot = self._build_snapshot()
+        if record is not None:
+            self._notify_record(record)
+        self._notify_snapshot(snapshot)
 
     def clear_buffer(self) -> int:
         """清空当前内存缓冲但不重置累计统计。"""
@@ -391,9 +473,12 @@ class SessionController(WorkerEventHandler):
                 self._state_machine.mark_disconnected()
             elif state is SessionState.DISCONNECTING:
                 self._state_machine.mark_disconnected()
+            record = self._cancel_stale_transfer_locked()
             self._close_log_locked()
             self._worker = None
             snapshot = self._build_snapshot()
+        if record is not None:
+            self._notify_record(record)
         self._notify_snapshot(snapshot)
 
     def _append_record_locked(self, record: LogRecord) -> None:
@@ -442,11 +527,72 @@ class SessionController(WorkerEventHandler):
                 SessionState.CONNECTED,
             )
 
+    def _require_no_transfer(self, action: str) -> None:
+        if self._transfer is not None and self._transfer.is_active:
+            raise FileTransferError(f"Ymodem 文件传输进行中，暂不能执行 {action}。")
+
     def _require_worker(self) -> SerialWorker:
         worker = self._worker
         if worker is None or not worker.is_alive:
             raise TransportIOError("串口工作线程未运行。")
         return worker
+
+    def _validate_ymodem_config(self) -> None:
+        """Ymodem 是二进制协议，XON/XOFF 或非 8N1 参数会破坏数据。"""
+        if (
+            self._config.bytesize != YMODEM_REQUIRED_BYTESIZE
+            or self._config.parity != "N"
+            or self._config.flow_control == "xonxoff"
+        ):
+            raise FileTransferError(
+                "Ymodem 需要 8 数据位、无校验，并关闭 XON/XOFF 流控。请调整串口参数并重新连接。"
+            )
+
+    @staticmethod
+    def _file_size(path: Path) -> int:
+        try:
+            if not path.is_file():
+                raise FileTransferError(f"无法发送文件：{path.name or path} 不是普通文件。")
+            return path.stat().st_size
+        except OSError as exc:
+            raise FileTransferError(f"无法读取文件：{exc.strerror or exc}") from exc
+
+    @staticmethod
+    def _transfer_record_text(transfer: FileTransferSnapshot) -> str:
+        if transfer.state is FileTransferState.SUCCEEDED:
+            return (
+                f"Ymodem 发送完成：{transfer.file_name}"
+                f"（{transfer.file_size} 字节，用时 {transfer.elapsed_seconds:.1f} 秒）。"
+            )
+        if transfer.state is FileTransferState.FAILED:
+            return f"Ymodem 发送失败：{transfer.message}"
+        return f"Ymodem 发送已取消：{transfer.message}"
+
+    def _cancel_stale_transfer_locked(self) -> LogRecord | None:
+        """Worker 已退出时兜底结束仍显示为活动中的传输。"""
+        if self._transfer is None or not self._transfer.is_active:
+            return None
+        message = "串口已断开，文件传输中止。"
+        self._transfer = replace(
+            self._transfer,
+            state=FileTransferState.CANCELLED,
+            message=message,
+        )
+        record = self._system_record(f"Ymodem 发送已取消：{message}")
+        self._append_record_locked(record)
+        return record
+
+    def _transfer_join_timeout(self, fallback: float) -> float:
+        """传输中按当前波特率放宽退出等待，覆盖正在写出的 1K 帧。"""
+        transfer = self._transfer
+        if transfer is None or not transfer.is_active:
+            return fallback
+        frame_seconds = (
+            YMODEM_TRANSFER_FRAME_BYTES * YMODEM_FRAME_BITS_PER_BYTE / max(self._config.baudrate, 1)
+        )
+        write_timeout = max(MINIMUM_WRITE_TIMEOUT, frame_seconds * 2)
+        # 当前帧写完后引擎还要尽力发一次 CAN 取消序列，两者都受写超时约束。
+        return max(fallback, min(MAX_TRANSFER_JOIN_TIMEOUT, write_timeout * 2 + 0.5))
 
     def _build_snapshot(self) -> SessionSnapshot:
         return SessionSnapshot(
@@ -458,6 +604,7 @@ class SessionController(WorkerEventHandler):
             rx_bytes=self._rx_bytes,
             tx_bytes=self._tx_bytes,
             dropped_records=self._buffer.dropped_records,
+            transfer=self._transfer,
         )
 
     def _system_record(self, message: str) -> LogRecord:

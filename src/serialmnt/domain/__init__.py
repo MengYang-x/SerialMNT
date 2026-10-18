@@ -14,6 +14,7 @@ from .errors import (
     ConfigIOError,
     DomainError,
     ErrorCode,
+    FileTransferError,
     HexFormatError,
     InternalError,
     InvalidStateTransitionError,
@@ -27,10 +28,17 @@ from .errors import (
     UserFacingError,
     ValidationError,
 )
-from .models import AppConfig, LogRecord, SerialConfig, SessionPreferences, SessionSnapshot
+from .models import (
+    AppConfig,
+    FileTransferSnapshot,
+    LogRecord,
+    SerialConfig,
+    SessionPreferences,
+    SessionSnapshot,
+)
 from .ports import Clock, ConfigStore, LogSink, PortInfo, PortScanner, Transport
 from .state_machine import SessionStateMachine
-from .states import SessionState
+from .states import ACTIVE_FILE_TRANSFER_STATES, FileTransferState, SessionState
 from .terminal import TerminalCell, TerminalScreen, TerminalStyle
 from .types import (
     DEFAULT_LINE_ENDING,
@@ -46,6 +54,7 @@ from .types import (
 )
 
 __all__ = [
+    "ACTIVE_FILE_TRANSFER_STATES",
     "DEFAULT_LINE_ENDING",
     "DEFAULT_MAX_BYTES",
     "DEFAULT_MAX_RECORDS",
@@ -58,6 +67,9 @@ __all__ = [
     "DomainError",
     "EncodingName",
     "ErrorCode",
+    "FileTransferError",
+    "FileTransferSnapshot",
+    "FileTransferState",
     "FlowControl",
     "HexFormatError",
     "IncrementalTextDecoder",

@@ -60,6 +60,44 @@ def test_send_panel_remembers_history_and_sends_periodically(qtbot: object) -> N
     controller.disconnect()
 
 
+def test_send_panel_stops_periodic_send_on_disconnect(qtbot: object) -> None:
+    transport = FakeTransport()
+    controller, _ = _connected_controller(transport)
+    panel = SendPanel(controller=controller)
+    qtbot.addWidget(panel)  # type: ignore[attr-defined]
+
+    panel.editor.setPlainText("timer")
+    panel.interval_spin.setValue(10)
+    panel.periodic_button.setChecked(True)
+    assert panel._periodic_timer.isActive()
+
+    panel.set_connected(False)
+
+    assert not panel.periodic_button.isChecked()
+    assert not panel._periodic_timer.isActive()
+    controller.disconnect()
+
+
+def test_send_panel_disables_sending_during_file_transfer(qtbot: object) -> None:
+    transport = FakeTransport()
+    controller, _ = _connected_controller(transport)
+    panel = SendPanel(controller=controller)
+    qtbot.addWidget(panel)  # type: ignore[attr-defined]
+
+    panel.set_transfer_active(True)
+
+    assert not panel.send_button.isEnabled()
+    assert not panel.periodic_button.isEnabled()
+    assert panel.send_content("blocked") is False
+    assert transport.writes == []
+
+    panel.set_transfer_active(False)
+    assert panel.send_button.isEnabled()
+    assert panel.send_content("allowed")
+    qtbot.waitUntil(lambda: transport.writes == [b"allowed\n"], timeout=2000)
+    controller.disconnect()
+
+
 def test_send_panel_editor_height_follows_content(qtbot: object) -> None:
     """输入框随内容长高，超过上限后不再长高。"""
     transport = FakeTransport()

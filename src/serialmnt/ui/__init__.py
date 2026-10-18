@@ -1,6 +1,7 @@
 """PySide6 用户界面层。"""
 
 from .connection_panel import ConnectionPanel
+from .file_transfer_panel import FileTransferPanel
 from .help_window import HelpWindow
 from .log_panel import LogPanel
 from .main_window import MainWindow
@@ -13,6 +14,7 @@ from .theme_manager import DataColors, apply_theme, data_colors, resolve_theme, 
 __all__ = [
     "ConnectionPanel",
     "DataColors",
+    "FileTransferPanel",
     "HelpWindow",
     "LogPanel",
     "MainWindow",

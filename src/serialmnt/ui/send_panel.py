@@ -55,6 +55,7 @@ class SendPanel(QWidget):
         self._controller = controller
         self._history: list[str] = []
         self._connected = False
+        self._transfer_active = False
         self._loading = False
         self._build_ui()
         self._connect_changes()
@@ -226,10 +227,21 @@ class SendPanel(QWidget):
     def set_connected(self, connected: bool) -> None:
         """根据连接状态启用发送控件。"""
         self._connected = connected
-        self.send_button.setEnabled(connected)
-        self.periodic_button.setEnabled(connected)
         if not connected and self.periodic_button.isChecked():
             self.periodic_button.setChecked(False)
+        self._apply_enabled_state()
+
+    def set_transfer_active(self, active: bool) -> None:
+        """文件传输期间暂停手动发送和周期发送。"""
+        self._transfer_active = active
+        if active and self.periodic_button.isChecked():
+            self.periodic_button.setChecked(False)
+        self._apply_enabled_state()
+
+    def _apply_enabled_state(self) -> None:
+        enabled = self._connected and not self._transfer_active
+        self.send_button.setEnabled(enabled)
+        self.periodic_button.setEnabled(enabled)
 
     def set_data_font_size(self, size: int) -> None:
         """按全局字号更新发送编辑框字体。"""
@@ -242,6 +254,8 @@ class SendPanel(QWidget):
 
     def send_content(self, content: str, *, remember: bool = True) -> bool:
         """发送一行内容；空 payload 视为无操作，失败时返回 False。"""
+        if self._transfer_active:
+            return False
         try:
             payload = self._build_payload(content)
             if not payload:

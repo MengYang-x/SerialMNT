@@ -73,6 +73,7 @@ class ConnectionPanel(QGroupBox):
         self._controller = controller
         self._port_provider = port_provider
         self._updating = False
+        self._transfer_active = False
         self._port_items: tuple[PortInfo, ...] = ()
         self._label_to_device: dict[str, str] = {}
         self._build_ui()
@@ -192,9 +193,17 @@ class ConnectionPanel(QGroupBox):
             self._set_connected(
                 snapshot.state in {SessionState.CONNECTED, SessionState.DISCONNECTING}
             )
+            self.dtr_check.setEnabled(not self._transfer_active)
+            self.rts_check.setEnabled(not self._transfer_active)
             self._update_port_tooltip()
         finally:
             self._updating = False
+
+    def set_transfer_active(self, active: bool) -> None:
+        """文件传输期间禁止修改 DTR/RTS，避免误复位设备或卡住流控。"""
+        self._transfer_active = active
+        self.dtr_check.setEnabled(not active)
+        self.rts_check.setEnabled(not active)
 
     def _show_pending_label(self) -> None:
         """中间态持续超过阈值时，才把等待文案显示到按钮上。"""

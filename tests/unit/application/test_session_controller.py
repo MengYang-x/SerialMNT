@@ -1,10 +1,11 @@
 """测试单会话控制器状态、缓冲和资源生命周期。"""
 
+from pathlib import Path
 from threading import Condition, Event
 from typing import cast
 
 import pytest
-from tests.fixtures.fakes import FakeClock, FakeTransport
+from tests.fixtures.fakes import FakeClock, FakeTransport, YmodemReceiverTransport
 
 from serialmnt.application import (
     MAX_SESSION_TITLE_LENGTH,
@@ -12,8 +13,12 @@ from serialmnt.application import (
     SessionController,
     SessionControllerOptions,
 )
+from serialmnt.application.ymodem import YmodemOptions
 from serialmnt.domain import (
     ErrorCode,
+    FileTransferError,
+    FileTransferSnapshot,
+    FileTransferState,
     InvalidStateTransitionError,
     PortBusyError,
     SerialConfig,
@@ -21,6 +26,24 @@ from serialmnt.domain import (
     TransportIOError,
     ValidationError,
 )
+
+
+def _transfer_worker_options() -> SerialWorkerOptions:
+    return SerialWorkerOptions(
+        read_timeout=0.005,
+        ymodem_options=YmodemOptions(
+            handshake_timeout=1.0,
+            header_timeout=0.5,
+            data_timeout=0.2,
+            eot_timeout=0.2,
+            final_block_timeout=0.05,
+            second_c_grace=0.005,
+            final_c_grace=0.005,
+            poll_timeout=0.005,
+            max_retries=2,
+            progress_interval=0,
+        ),
+    )
 
 
 class SnapshotRecorder:
@@ -67,6 +90,7 @@ def _controller(
     config: SerialConfig | None = None,
     snapshots: SnapshotRecorder | None = None,
     records: RecordRecorder | None = None,
+    worker_options: SerialWorkerOptions | None = None,
 ) -> SessionController:
     return SessionController(
         config=config or SerialConfig(port="COM1"),
@@ -77,6 +101,7 @@ def _controller(
             title="测试会话",
             on_snapshot=snapshots,
             on_record=records,
+            worker_options=worker_options,
         ),
     )
 
@@ -333,3 +358,211 @@ def test_controller_rename_to_same_title_does_not_broadcast() -> None:
     controller.rename("测试会话")
 
     assert snapshots.snapshots == []
+
+
+def test_controller_transfers_file_and_publishes_result(tmp_path: Path) -> None:
+    source = b"YMODEM-DATA-" * 200
+    path = tmp_path / "firmware.bin"
+    path.write_bytes(source)
+    transport = YmodemReceiverTransport()
+    snapshots = SnapshotRecorder()
+    records = RecordRecorder()
+    controller = _controller(
+        transport,
+        snapshots=snapshots,
+        records=records,
+        worker_options=_transfer_worker_options(),
+    )
+    try:
+        controller.connect()
+        assert snapshots.wait_for(lambda snapshot: snapshot.state is SessionState.CONNECTED)
+
+        controller.start_file_send(path)
+
+        assert controller.snapshot.transfer is not None
+        assert controller.snapshot.transfer.state is FileTransferState.WAITING
+        assert snapshots.wait_for(
+            lambda snapshot: (
+                snapshot.transfer is not None
+                and snapshot.transfer.state is FileTransferState.SUCCEEDED
+            )
+        )
+        transfer = controller.snapshot.transfer
+        assert transfer is not None
+        assert transfer.transferred_bytes == len(source)
+        assert transfer.file_size == len(source)
+        assert transport.received_data() == source
+        assert records.wait_for(lambda record: "Ymodem 发送完成" in getattr(record, "text", ""))
+        assert any("开始发送文件" in record.text for record in controller.records)
+
+        controller.send(b"after")
+        assert snapshots.wait_for(lambda snapshot: snapshot.tx_bytes == 5)
+        assert transport.writes[-1] == b"after"
+    finally:
+        controller.close(force=True)
+
+
+def test_controller_rejects_send_and_second_transfer_while_busy(tmp_path: Path) -> None:
+    path = tmp_path / "firmware.bin"
+    path.write_bytes(b"x" * 100)
+    transport = YmodemReceiverTransport(initial_c=False)
+    snapshots = SnapshotRecorder()
+    controller = _controller(
+        transport,
+        snapshots=snapshots,
+        worker_options=_transfer_worker_options(),
+    )
+    try:
+        controller.connect()
+        assert snapshots.wait_for(lambda snapshot: snapshot.state is SessionState.CONNECTED)
+
+        controller.start_file_send(path)
+        with pytest.raises(FileTransferError):
+            controller.send(b"busy")
+        with pytest.raises(FileTransferError):
+            controller.start_file_send(path)
+        with pytest.raises(FileTransferError):
+            controller.set_line_state(dtr=False, rts=False)
+
+        assert controller.cancel_file_send()
+        assert snapshots.wait_for(
+            lambda snapshot: (
+                snapshot.transfer is not None
+                and snapshot.transfer.state is FileTransferState.CANCELLED
+            )
+        )
+        assert not controller.cancel_file_send()
+    finally:
+        controller.close(force=True)
+
+
+def test_controller_rejects_transfer_with_incompatible_serial_config(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "firmware.bin"
+    path.write_bytes(b"x" * 10)
+    transport = FakeTransport()
+    snapshots = SnapshotRecorder()
+    controller = _controller(
+        transport,
+        config=SerialConfig(port="COM1", parity="E"),
+        snapshots=snapshots,
+        worker_options=_transfer_worker_options(),
+    )
+    try:
+        controller.connect()
+        assert snapshots.wait_for(lambda snapshot: snapshot.state is SessionState.CONNECTED)
+
+        with pytest.raises(FileTransferError, match="8 数据位"):
+            controller.start_file_send(path)
+        assert controller.snapshot.transfer is None
+    finally:
+        controller.close(force=True)
+
+
+def test_controller_rejects_missing_file_without_transfer_state(
+    tmp_path: Path,
+) -> None:
+    transport = FakeTransport()
+    snapshots = SnapshotRecorder()
+    controller = _controller(
+        transport,
+        snapshots=snapshots,
+        worker_options=_transfer_worker_options(),
+    )
+    try:
+        controller.connect()
+        assert snapshots.wait_for(lambda snapshot: snapshot.state is SessionState.CONNECTED)
+
+        with pytest.raises(FileTransferError, match="不是普通文件"):
+            controller.start_file_send(tmp_path / "missing.bin")
+        assert controller.snapshot.transfer is None
+    finally:
+        controller.close(force=True)
+
+
+def test_controller_disconnect_cancels_active_transfer(tmp_path: Path) -> None:
+    path = tmp_path / "firmware.bin"
+    path.write_bytes(b"x" * 100)
+    transport = YmodemReceiverTransport(initial_c=False)
+    snapshots = SnapshotRecorder()
+    controller = _controller(
+        transport,
+        snapshots=snapshots,
+        worker_options=_transfer_worker_options(),
+    )
+    controller.connect()
+    assert snapshots.wait_for(lambda snapshot: snapshot.state is SessionState.CONNECTED)
+    controller.start_file_send(path)
+    assert snapshots.wait_for(
+        lambda snapshot: (
+            snapshot.transfer is not None and snapshot.transfer.state is FileTransferState.WAITING
+        )
+    )
+
+    assert controller.disconnect()
+    assert controller.state is SessionState.DISCONNECTED
+    transfer = controller.snapshot.transfer
+    assert transfer is not None
+    assert transfer.state is FileTransferState.CANCELLED
+
+
+def test_controller_stopped_worker_cancels_stale_transfer() -> None:
+    records = RecordRecorder()
+    controller = _controller(FakeTransport(), records=records)
+    controller.on_file_transfer(
+        FileTransferSnapshot(
+            state=FileTransferState.WAITING,
+            file_name="firmware.bin",
+            file_size=100,
+            transferred_bytes=0,
+            block_number=0,
+            retries=0,
+            elapsed_seconds=0.0,
+            message="等待接收端发起传输。",
+        )
+    )
+
+    controller.on_stopped()
+
+    transfer = controller.snapshot.transfer
+    assert transfer is not None
+    assert transfer.state is FileTransferState.CANCELLED
+    assert "串口已断开" in transfer.message
+    assert any("Ymodem 发送已取消" in record.text for record in controller.records)
+    assert records.wait_for(lambda record: "Ymodem 发送已取消" in getattr(record, "text", ""))
+
+
+def test_controller_transfer_join_timeout_scales_with_baudrate() -> None:
+    transfer = FileTransferSnapshot(
+        state=FileTransferState.SENDING,
+        file_name="firmware.bin",
+        file_size=1024,
+        transferred_bytes=512,
+        block_number=1,
+        retries=0,
+        elapsed_seconds=1.0,
+    )
+    fast = _controller(FakeTransport())
+    assert fast._transfer_join_timeout(1.5) == 1.5
+    fast.on_file_transfer(transfer)
+    # 115200 下帧写超时为下限 2 s，退出等待覆盖当前帧和取消序列。
+    assert fast._transfer_join_timeout(1.5) == 4.5
+
+    slow = _controller(FakeTransport(), config=SerialConfig(port="COM1", baudrate=9600))
+    slow.on_file_transfer(transfer)
+    # 9600 下计算值超过 5 s，按上限截断。
+    assert slow._transfer_join_timeout(1.5) == 5.0
+
+    slow.on_file_transfer(
+        FileTransferSnapshot(
+            state=FileTransferState.SUCCEEDED,
+            file_name="firmware.bin",
+            file_size=1024,
+            transferred_bytes=1024,
+            block_number=1,
+            retries=0,
+            elapsed_seconds=1.0,
+        )
+    )
+    assert slow._transfer_join_timeout(1.5) == 1.5

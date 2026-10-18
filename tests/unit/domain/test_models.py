@@ -10,6 +10,8 @@ from serialmnt.domain import (
     DEFAULT_LINE_ENDING,
     AppConfig,
     ErrorCode,
+    FileTransferSnapshot,
+    FileTransferState,
     LogRecord,
     SerialConfig,
     SessionPreferences,
@@ -18,6 +20,21 @@ from serialmnt.domain import (
     UserFacingError,
     ValidationError,
 )
+
+
+def _transfer(**overrides: object) -> FileTransferSnapshot:
+    values: dict[str, object] = {
+        "state": FileTransferState.SENDING,
+        "file_name": "firmware.bin",
+        "file_size": 1024,
+        "transferred_bytes": 512,
+        "block_number": 1,
+        "retries": 0,
+        "elapsed_seconds": 0.5,
+        "message": "发送中",
+    }
+    values.update(overrides)
+    return FileTransferSnapshot(**values)  # type: ignore[arg-type]
 
 
 def _preferences(**overrides: object) -> SessionPreferences:
@@ -177,6 +194,58 @@ def test_session_snapshot_accepts_user_error() -> None:
     )
 
     assert snapshot.last_error is user_error
+
+
+def test_file_transfer_snapshot_validates_and_reports_active_state() -> None:
+    transfer = _transfer()
+
+    assert transfer.is_active
+    assert not _transfer(state=FileTransferState.SUCCEEDED).is_active
+    with pytest.raises(ValidationError):
+        _transfer(state=cast(FileTransferState, "bad"))
+    with pytest.raises(ValidationError):
+        _transfer(file_name="")
+    with pytest.raises(ValidationError):
+        _transfer(file_size=-1)
+    with pytest.raises(ValidationError):
+        _transfer(transferred_bytes=2048)
+    with pytest.raises(ValidationError):
+        _transfer(block_number=-1)
+    with pytest.raises(ValidationError):
+        _transfer(retries=-1)
+    with pytest.raises(ValidationError):
+        _transfer(elapsed_seconds=-0.1)
+    with pytest.raises(ValidationError):
+        _transfer(message=cast(str, 1))
+
+
+def test_session_snapshot_accepts_transfer_and_rejects_wrong_type() -> None:
+    transfer = _transfer(state=FileTransferState.WAITING, transferred_bytes=0)
+    snapshot = SessionSnapshot(
+        "s",
+        "COM1",
+        SessionState.CONNECTED,
+        SerialConfig(port="COM1"),
+        None,
+        0,
+        0,
+        0,
+        transfer,
+    )
+
+    assert snapshot.transfer is transfer
+    with pytest.raises(ValidationError):
+        SessionSnapshot(
+            "s",
+            "COM1",
+            SessionState.CONNECTED,
+            SerialConfig(port="COM1"),
+            None,
+            0,
+            0,
+            0,
+            cast(FileTransferSnapshot, "bad"),
+        )
 
 
 def test_session_preferences_rejects_mutable_or_oversized_history() -> None:

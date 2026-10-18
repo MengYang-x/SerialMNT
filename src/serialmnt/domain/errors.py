@@ -19,6 +19,7 @@ class ErrorCode(str, Enum):
     TRANSPORT_IO_ERROR = "TRANSPORT_IO_ERROR"
     LOG_IO_ERROR = "LOG_IO_ERROR"
     CONFIG_IO_ERROR = "CONFIG_IO_ERROR"
+    FILE_TRANSFER_ERROR = "FILE_TRANSFER_ERROR"
     INTERNAL_ERROR = "INTERNAL_ERROR"
 
 
@@ -192,6 +193,15 @@ class ConfigIOError(DomainError):
     recoverable = True
     default_message = "配置读写失败。"
     default_suggestion = "请检查配置目录权限和可用磁盘空间。"
+
+
+class FileTransferError(DomainError):
+    """Ymodem 文件发送失败或当前不允许发送。"""
+
+    code = ErrorCode.FILE_TRANSFER_ERROR
+    recoverable = True
+    default_message = "文件传输失败。"
+    default_suggestion = "请确认设备已进入 Ymodem 接收模式，并检查串口参数和文件是否可读。"
 
 
 class InternalError(DomainError):

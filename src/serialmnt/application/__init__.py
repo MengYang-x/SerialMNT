@@ -10,6 +10,7 @@ from .session_controller import (
     SnapshotCallback,
 )
 from .session_manager import SessionManager
+from .ymodem import YmodemOptions, YmodemSender, sanitize_ymodem_name
 
 __all__ = [
     "MAX_SESSION_TITLE_LENGTH",
@@ -22,6 +23,9 @@ __all__ = [
     "SessionManager",
     "SnapshotCallback",
     "WorkerEventHandler",
+    "YmodemOptions",
+    "YmodemSender",
     "default_log_directory",
     "sanitize_port_name",
+    "sanitize_ymodem_name",
 ]
