@@ -168,6 +168,11 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(app_icon())
         self.resize(1180, 760)
         self.setMinimumSize(900, 600)
+        # 状态栏只承载临时消息：提前创建并隐藏，消息清空后再次隐藏，
+        # 避免检查更新等操作在窗口底部留下一条永久空白。
+        self._status_bar = self.statusBar()
+        self._status_bar.messageChanged.connect(self._status_message_changed)
+        self._status_bar.hide()
         self._build_actions()
         self._restore_or_create_sessions(initial_config)
         self._center_on_primary_screen()
@@ -175,6 +180,10 @@ class MainWindow(QMainWindow):
         self._update_timer.setSingleShot(True)
         self._update_timer.setInterval(3000)
         self._update_timer.timeout.connect(self._auto_check_updates)
+
+    def _status_message_changed(self, message: str) -> None:
+        """按临时消息有无显示状态栏，消息超时或清空后让出底部空间。"""
+        self._status_bar.setVisible(bool(message))
 
     def _build_actions(self) -> None:
         new_action = QAction("新建会话", self)

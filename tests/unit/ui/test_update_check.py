@@ -242,6 +242,22 @@ def test_manual_check_reports_up_to_date(qtbot: object) -> None:
     )
 
 
+def test_status_bar_hides_after_message_clears(qtbot: object) -> None:
+    """状态栏只在有临时消息时占用窗口底部，消息消失后不能留下空白。"""
+    window = _window(qtbot, _ImmediateSource(_release("0.2.3")))
+    assert window.statusBar().isVisible() is False
+
+    window._manual_check_updates()
+    qtbot.waitUntil(  # type: ignore[attr-defined]
+        lambda: "当前已是最新版本 0.2.3" in window.statusBar().currentMessage(),
+        timeout=2000,
+    )
+    assert window.statusBar().isVisible() is True
+
+    window.statusBar().clearMessage()
+    assert window.statusBar().isVisible() is False
+
+
 def test_manual_check_reports_failure(qtbot: object) -> None:
     window = _window(qtbot, _ImmediateSource(error=UpdateCheckError("离线")))
 
