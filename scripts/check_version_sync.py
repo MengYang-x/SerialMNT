@@ -45,6 +45,14 @@ def find_version_issues(root: Path) -> list[str]:
     issues: list[str] = []
     if not SEMVER_PATTERN.fullmatch(version):
         issues.append(f"版本号 {version!r} 不是 MAJOR.MINOR.PATCH 格式。")
+    issues.extend(_header_issues(root, version))
+    issues.extend(_plan_issues(root, version))
+    issues.extend(_guide_issues(root, version))
+    return issues
+
+
+def _header_issues(root: Path, version: str) -> list[str]:
+    issues: list[str] = []
     header = f"> 软件版本：{version}"
     for relative in HEADER_FILES:
         try:
@@ -54,38 +62,40 @@ def find_version_issues(root: Path) -> list[str]:
             continue
         if header not in text:
             issues.append(f"{relative.as_posix()} 缺少版本头“{header}”。")
+    return issues
 
+
+def _plan_issues(root: Path, version: str) -> list[str]:
     try:
         plan_text = (root / IMPLEMENTATION_PLAN).read_text(encoding="utf-8")
     except OSError as exc:
-        issues.append(f"无法读取 {IMPLEMENTATION_PLAN.as_posix()}：{exc}")
-    else:
-        plan_version = PLAN_VERSION_PATTERN.search(plan_text)
-        if plan_version is None:
-            issues.append(f"{IMPLEMENTATION_PLAN.as_posix()} 缺少“当前软件版本为 `x.y.z`”说明。")
-        elif plan_version.group(1) != version:
-            issues.append(
-                f"{IMPLEMENTATION_PLAN.as_posix()} 的当前软件版本为 "
-                f"“{plan_version.group(1)}”，应为“{version}”。"
-            )
+        return [f"无法读取 {IMPLEMENTATION_PLAN.as_posix()}：{exc}"]
+    plan_version = PLAN_VERSION_PATTERN.search(plan_text)
+    if plan_version is None:
+        return [f"{IMPLEMENTATION_PLAN.as_posix()} 缺少“当前软件版本为 `x.y.z`”说明。"]
+    if plan_version.group(1) != version:
+        return [
+            f"{IMPLEMENTATION_PLAN.as_posix()} 的当前软件版本为 "
+            f"“{plan_version.group(1)}”，应为“{version}”。"
+        ]
+    return []
 
-    guide_path = root / USER_GUIDE
+
+def _guide_issues(root: Path, version: str) -> list[str]:
     try:
-        guide_bytes = guide_path.read_bytes()
+        guide_bytes = (root / USER_GUIDE).read_bytes()
         guide_text = guide_bytes.decode("utf-8")
     except (OSError, UnicodeDecodeError) as exc:
-        issues.append(f"无法读取 {USER_GUIDE.as_posix()}：{exc}")
-    else:
-        issues.extend(_version_entry_issues(guide_text, version))
-        try:
-            packaged_bytes = (root / PACKAGED_GUIDE).read_bytes()
-        except OSError as exc:
-            issues.append(f"无法读取 {PACKAGED_GUIDE.as_posix()}：{exc}")
-        else:
-            if packaged_bytes != guide_bytes:
-                issues.append(
-                    f"{PACKAGED_GUIDE.as_posix()} 未与 {USER_GUIDE.as_posix()} 逐字节同步。"
-                )
+        return [f"无法读取 {USER_GUIDE.as_posix()}：{exc}"]
+
+    issues = _version_entry_issues(guide_text, version)
+    try:
+        packaged_bytes = (root / PACKAGED_GUIDE).read_bytes()
+    except OSError as exc:
+        issues.append(f"无法读取 {PACKAGED_GUIDE.as_posix()}：{exc}")
+        return issues
+    if packaged_bytes != guide_bytes:
+        issues.append(f"{PACKAGED_GUIDE.as_posix()} 未与 {USER_GUIDE.as_posix()} 逐字节同步。")
     return issues
 
 
