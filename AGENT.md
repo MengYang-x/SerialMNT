@@ -1,7 +1,7 @@
 # SerialMNT 工程代理规范
 
-> 文档版本：1.2  
-> 更新时间：2026-10-04 18:23:19 CST（星期日）  
+> 文档版本：1.3  
+> 更新时间：2026-10-18 12:00:27 CST（星期日）  
 > 适用范围：SerialMNT 全工程  
 > 文件用途：约束代理和开发者在仓库内的工作方式
 
@@ -51,7 +51,7 @@
 - 提升版本号时，必须在同一提交中更新：
   1. `src/serialmnt/__init__.py` 的 `__version__`。
   2. `docs/README.md`、`docs/user-guide.md`、`docs/developer-guide.md` 的“软件版本”头。
-  3. `docs/user-guide.md` 第 10 章“软件版本”：新版本条目放在最上方，格式为 `- Vx.y.z`，下方用缩进列表写中文变更内容，只记录用户可感知的新增、修复、变更和兼容性影响。
+  3. `docs/user-guide.md` 第 10 章“软件版本”：新版本条目放在最上方，格式为 `- Vx.y.z`，下一行写 `更新时间：YYYY-MM-DD`，再下方用缩进列表写中文变更内容，只记录用户可感知的新增、修复、变更和兼容性影响。
   4. `src/serialmnt/ui/assets/user-guide.md` 与 `docs/user-guide.md` 逐字节同步。
 - 发布正式版本时，另建 `docs/release-notes-<version>.md` 并更新发布清单；日常递增不强制新建发布说明文件。
 - 提交前运行 `python scripts/check_version_sync.py`；CI 会执行同一检查。纯测试变更可豁免版本号，但必须在提交说明中注明豁免理由。

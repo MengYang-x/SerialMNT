@@ -1,7 +1,8 @@
 """从代码生成应用图标（PNG + 多尺寸 ICO）。
 
-图标是程序化绘制的几何图形，不依赖外部素材。修改图形后重新运行本脚本，
-把生成结果与脚本一起提交：
+图标是程序化绘制的几何图形，不依赖外部素材：圆角渐变底上叠加一条
+方波折线构成的 Serial 首字母 S，同时表达串口数字信号与收发方向。
+修改图形后重新运行本脚本，把生成结果与脚本一起提交：
 
     .\.venv\Scripts\python.exe scripts\generate_icon.py
 """
@@ -12,7 +13,7 @@ import struct
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QBuffer, QPointF, QRectF, Qt
+from PySide6.QtCore import QBuffer, QRectF, Qt
 from PySide6.QtGui import (
     QBrush,
     QColor,
@@ -20,8 +21,8 @@ from PySide6.QtGui import (
     QImage,
     QLinearGradient,
     QPainter,
+    QPainterPath,
     QPen,
-    QPolygonF,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,11 +30,11 @@ ASSETS = ROOT / "src" / "serialmnt" / "ui" / "assets"
 ICO_SIZES = (16, 32, 48, 256)
 ICO_MAX_EDGE = 256
 CORNER_RADIUS = 56.0
-STROKE_WIDTH = 20.0
+STROKE_WIDTH = 26.0
 
 
 def _draw_icon(size: int) -> QImage:
-    """绘制圆角渐变底 + 白色双向箭头，代表串口收发。"""
+    """绘制圆角渐变底 + 由方波折线构成的 Serial 首字母 S。"""
     image = QImage(size, size, QImage.Format.Format_ARGB32_Premultiplied)
     image.fill(Qt.GlobalColor.transparent)
     scale = size / 256.0
@@ -41,8 +42,8 @@ def _draw_icon(size: int) -> QImage:
     try:
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         gradient = QLinearGradient(0.0, 0.0, float(size), float(size))
-        gradient.setColorAt(0.0, QColor("#3B82F6"))
-        gradient.setColorAt(1.0, QColor("#1D4ED8"))
+        gradient.setColorAt(0.0, QColor("#2563EB"))
+        gradient.setColorAt(1.0, QColor("#1E3A8A"))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QBrush(gradient))
         painter.drawRoundedRect(
@@ -54,36 +55,17 @@ def _draw_icon(size: int) -> QImage:
         pen = QPen(QColor("#FFFFFF"))
         pen.setWidthF(STROKE_WIDTH * scale)
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        path = QPainterPath()
+        path.moveTo(184.0 * scale, 64.0 * scale)
+        path.lineTo(72.0 * scale, 64.0 * scale)
+        path.lineTo(72.0 * scale, 128.0 * scale)
+        path.lineTo(184.0 * scale, 128.0 * scale)
+        path.lineTo(184.0 * scale, 192.0 * scale)
+        path.lineTo(72.0 * scale, 192.0 * scale)
         painter.setPen(pen)
-        painter.drawLine(
-            QPointF(76.0 * scale, 104.0 * scale),
-            QPointF(172.0 * scale, 104.0 * scale),
-        )
-        painter.drawLine(
-            QPointF(180.0 * scale, 152.0 * scale),
-            QPointF(84.0 * scale, 152.0 * scale),
-        )
-
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor("#FFFFFF"))
-        painter.drawPolygon(
-            QPolygonF(
-                [
-                    QPointF(158.0 * scale, 80.0 * scale),
-                    QPointF(196.0 * scale, 104.0 * scale),
-                    QPointF(158.0 * scale, 128.0 * scale),
-                ]
-            )
-        )
-        painter.drawPolygon(
-            QPolygonF(
-                [
-                    QPointF(98.0 * scale, 128.0 * scale),
-                    QPointF(60.0 * scale, 152.0 * scale),
-                    QPointF(98.0 * scale, 176.0 * scale),
-                ]
-            )
-        )
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawPath(path)
     finally:
         painter.end()
     return image
