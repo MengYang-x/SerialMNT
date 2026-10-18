@@ -1,12 +1,12 @@
 # SerialMNT
 
-SerialMNT 是一个面向开发者与测试人员的跨平台串口调试助手。项目计划支持多标签串口会话、文本与 HEX 收发、Ymodem 文件发送、日志导出、周期发送，以及 Windows 和 Linux 单文件分发。
+SerialMNT 是一个面向开发者与测试人员的跨平台串口调试助手。支持多标签串口会话、文本与 HEX 收发、Ymodem 文件发送、日志导出、周期发送，以及 Windows 和 Linux 单文件分发。
 
 > 参考项目：<https://github.com/Queqiongtao/QSerialTool>
 
 ## 当前状态
 
-当前软件版本：**0.3.1**。工程当前处于 **M5：发布质量**，M0-M4 功能已完成。
+当前软件版本：**0.7.2**。M0-M5 已实现，M6 增量「Ymodem 单文件发送」已完成。
 
 已完成：
 
@@ -19,7 +19,7 @@ SerialMNT 是一个面向开发者与测试人员的跨平台串口调试助手�
 - M6（增量）：实现 Ymodem 单文件发送，支持 1K/128 字节块、进度、速度、重试、取消和状态提示。
 - 增量：启动时检查更新（GitHub Releases），发现新版本时提示并打开下载页；不自动下载或安装。
 
-当前仍需在允许执行本地产物的 Windows 环境和 Ubuntu 22.04 上完成单文件启动、真实串口和长时间稳定性验收。
+Windows 单文件已构建并完成离屏冷启动验证；真实串口、桌面环境人工验收和长时间稳定性验收仍需在目标机器执行，Linux 单文件需在 Ubuntu 22.04 上构建。
 ## 环境要求
 
 - Python 3.10.x（`pyproject.toml` 限定 `>=3.10,<3.11`，3.11 及以上暂不支持）
@@ -108,6 +108,7 @@ chmod +x scripts/build.sh
 详细步骤见 `docs/build-and-release.md`，发布检查项见 `docs/release-checklist.md`。
 ## 项目文档
 
+- 项目介绍与快速上手：`docs/introduction.md`
 - 完整使用手册：`docs/user-guide.md`
 - 当前实现开发指南：`docs/developer-guide.md`
 - 文档索引与同步规则：`docs/README.md`
